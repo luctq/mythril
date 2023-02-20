@@ -1,0 +1,2 @@
+class ContractSolc:
+    pass

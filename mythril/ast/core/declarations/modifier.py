@@ -1,0 +1,2 @@
+class Modifier:
+    pass

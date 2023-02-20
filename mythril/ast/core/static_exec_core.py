@@ -1,0 +1,2 @@
+class StaticExecCore:
+    pass

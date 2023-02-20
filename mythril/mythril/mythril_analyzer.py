@@ -138,6 +138,7 @@ class MythrilAnalyzer:
         for contract in self.contracts:
             StartTime()  # Reinitialize start time for new contracts
             try:
+                static = StaticExec(contract.input_file)
                 sym = SymExecWrapper(
                     contract,
                     self.address,
