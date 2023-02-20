@@ -39,3 +39,5 @@ z3-solver>=4.8.8.0
 matplotlib
 pre-commit<2.21.0
 certifi>=2020.06.20
+crytic-compile>=0.3.0
+solc-select>=v1.0.0b1
