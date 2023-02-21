@@ -1,3 +1,2 @@
 class ModifierSolc: 
-    pass()
-    
+    pass

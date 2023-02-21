@@ -52,3 +52,11 @@ class IllegalArgumentError(ValueError):
     """The argument used does not exist"""
 
     pass
+
+class StaticException(Exception):
+    pass
+
+
+class StaticError(StaticException):
+    pass
+
