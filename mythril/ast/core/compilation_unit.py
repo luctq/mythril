@@ -6,6 +6,7 @@ from mythril.ast.core.declarations.contract import Contract
 from mythril.ast.core.context.context import Context
 from mythril.ast.core.scope.scope import FileScope
 from mythril.ast.core.declarations.pragma_directive import Pragma
+from mythril.ast.core.declarations.function import Function
 if TYPE_CHECKING:
     from mythril.ast.core.static_exec_core import StaticExecCore
 
@@ -19,6 +20,8 @@ class StaticCompilationUnit(Context):
         self._source_units: Dict[int, str] = {}
         self._pragma_directives: List[Pragma] = []
         self.scopes: Dict[Filename, FileScope] = {}
+
+        self._all_functions: Set[Function] = set()
     
     @property
     def source_units(self) -> Dict[int, str]:
@@ -32,6 +35,13 @@ class StaticCompilationUnit(Context):
     def pragma_directives(self) -> List[Pragma]:
         """list(core.declarations.Pragma): Pragma directives."""
         return self._pragma_directives
+
+    @property
+    def functions(self) -> List[Function]:
+        return list(self._all_functions)
+
+    def add_function(self, func: Function):
+        self._all_functions.add(func)
 
     def get_scope(self, filename_str: str) -> FileScope:
         filename = self._crytic_compile_compilation_unit.crytic_compile.filename_lookup(

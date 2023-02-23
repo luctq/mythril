@@ -32,5 +32,21 @@ class StaticExec(StaticExecCore):
                 parser.parse_top_level_from_loaded_json(ast, path) # dong nay quan trong
                 self.add_source_code(path)
             # _update_file_scopes(compilation_unit_static.scopes.values())
-            # self._init_parsing_and_analyses()
+            self._init_parsing_and_analyses()
+    def _init_parsing_and_analyses(self) -> None:
+        for parser in self._parsers:
+            try:
+                parser.parse_contracts()
+            except Exception as e:
+                if self.no_fail:
+                    continue
+                raise e
+      
+        # for parser in self._parsers:
+        #     try:
+        #         parser.analyze_contracts()
+        #     except Exception as e:
+        #         if self.no_fail:
+        #             continue
+        #         raise e
             
