@@ -2,6 +2,7 @@ from typing import Optional, List, Dict, Callable, Tuple, TYPE_CHECKING, Union, 
 
 from mythril.ast.core.source_mapping.source_mapping import SourceMapping
 from mythril.ast.core.declarations.function_contract import FunctionContract
+from mythril.ast.core.declarations.function import Function, FunctionLanguage
 if TYPE_CHECKING:
     from mythril.ast.core.compilation_unit import StaticCompilationUnit
     from mythril.ast.core.scope.scope import FileScope
@@ -96,5 +97,61 @@ class Contract(SourceMapping):
     def variables_as_dict(self) -> Dict[str, "StateVariable"]:
         return self._variables
     
+    @property
+    def functions(self) -> List["FunctionContract"]:
+        """
+        list(Function): List of the functions
+        """
+        return list(self._functions.values())
+    def set_functions(self, functions: Dict[str, "FunctionContract"]):
+        """
+        Set the functions
+
+        :param functions:  dict full_name -> function
+        :return:
+        """
+        self._functions = functions
+
+
+    @property
+    def functions_declared(self) -> List["FunctionContract"]:
+        """
+        list(Function): List of the functions defined within the contract (not inherited)
+        """
+        return [f for f in self.functions if f.contract_declarer == self]
+    
     def add_variables_ordered(self, new_vars: List["StateVariable"]):
         self._variables_ordered += new_vars
+
+    def available_elements_from_inheritances(
+        self,
+        elements: Dict[str, "Function"],
+        getter_available: Callable[["Contract"], List["FunctionContract"]],
+    ) -> Dict[str, "Function"]:
+        """
+
+        :param elements: dict(canonical_name -> elements)
+        :param getter_available: fun x
+        :return:
+        """
+        # keep track of the contracts visited
+        # to prevent an ovveride due to multiple inheritance of the same contract
+        # A is B, C, D is C, --> the second C was already seen
+        inherited_elements: Dict[str, "FunctionContract"] = {}
+        accessible_elements = {}
+        contracts_visited = []
+        for father in self.inheritance_reverse:
+            functions: Dict[str, "FunctionContract"] = {
+                v.full_name: v
+                for v in getter_available(father)
+                if v.contract not in contracts_visited
+                and v.function_language
+                != FunctionLanguage.Yul  # Yul functions are not propagated in the inheritance
+            }
+            contracts_visited.append(father)
+            inherited_elements.update(functions)
+
+        for element in inherited_elements.values():
+            accessible_elements[element.full_name] = elements[element.canonical_name]
+
+        return accessible_elements

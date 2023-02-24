@@ -1,6 +1,8 @@
 from typing import Dict
 from mythril.ast.core.variables.variable import Variable
 from mythril.ast.solc_parsing.exceptions import ParsingError
+from mythril.ast.solc_parsing.declarations.caller_context import CallerContextExpression
+from mythril.ast.solc_parsing.solidity_types.type_parsing import parse_type
 
 class MultipleVariablesDeclaration(Exception):
     """
@@ -50,6 +52,18 @@ class VariableDeclarationSolc:
         else:
             pass
     
+    @property
+    def underlying_variable(self) -> Variable:
+        return self._variable
+
+    @property
+    def reference_id(self) -> int:
+        """
+        Return the solc id. It can be compared with the referencedDeclaration attr
+        Returns None if it was not parsed (legacy AST)
+        """
+        return self._reference_id
+    
     def _init_from_declaration(self, var: Dict, init: bool):
         if self._is_compact_ast:
             attributes = var
@@ -96,3 +110,17 @@ class VariableDeclarationSolc:
             self._variable.visibility = attributes["visibility"]
         else:
             self._variable.visibility = "internal"
+
+    def analyze(self, caller_context: CallerContextExpression):
+        # Can be re-analyzed due to inheritance
+        if self._was_analyzed:
+            return
+        self._was_analyzed = True
+        print("self._elem_to_parse", self._elem_to_parse)
+        if self._elem_to_parse:
+            self._variable.type = parse_type(self._elem_to_parse, caller_context)
+            self._elem_to_parse = None
+
+        # if self._variable.initialized:
+        #     self._variable.expression = parse_expression(self._initializedNotParsed, caller_context)
+        #     self._initializedNotParsed = None

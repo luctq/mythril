@@ -1,12 +1,14 @@
-from typing import List, Dict, Callable, TYPE_CHECKING, Union
+from typing import List, Dict, Callable, TYPE_CHECKING, Union, Set
 from mythril.ast.solc_parsing.declarations.caller_context import CallerContextExpression
 from mythril.ast.core.declarations.contract import Contract
+from mythril.ast.core.declarations.function import Function
 from mythril.ast.solc_parsing.declarations.function import FunctionSolc
 from mythril.ast.solc_parsing.declarations.modifier import ModifierSolc
-from mythril.ast.solc_parsing.exceptions import ParsingError
+from mythril.ast.solc_parsing.exceptions import ParsingError, VariableNotFound
 from mythril.ast.core.declarations.function_contract import FunctionContract
 from mythril.ast.core.variables.state_variable import StateVariable
 from mythril.ast.solc_parsing.variables.state_variable import StateVariableSolc
+from mythril.ast.core.declarations.modifier import Modifier
 if TYPE_CHECKING:
     from mythril.ast.solc_parsing.static_compilation_unit_solc import StaticCompilationUnitSolc
     from mythril.ast.core.compilation_unit import StaticCompilationUnit
@@ -186,4 +188,60 @@ class ContractSolc(CallerContextExpression):
         self._functions_no_params.append(func_parser)
         self._functions_parser.append(func_parser)
         self._static_parser.add_function_or_modifier_parser(func_parser)
-    
+
+    def analyze_params_functions(self):
+        try:
+            elements_no_params = self._functions_no_params
+            getter = lambda c: c.functions_parser
+            getter_available = lambda c: c.functions_declared
+            Cls = FunctionContract
+            Cls_parser = FunctionSolc
+            functions = self._analyze_params_elements(
+                elements_no_params,
+                getter,
+                getter_available,
+                Cls,
+                Cls_parser,
+                self._functions_parser,
+            )
+            print("analyze_params_functions", functions)
+            self._contract.set_functions(functions)
+        except (VariableNotFound, KeyError) as e:
+            self.log_incorrect_parsing(f"Missing params {e}")
+        self._functions_no_params = []
+    def _analyze_params_elements(  # pylint: disable=too-many-arguments,too-many-locals
+        self,
+        elements_no_params: List[FunctionSolc],
+        getter: Callable[["ContractSolc"], List[FunctionSolc]],
+        getter_available: Callable[[Contract], List[FunctionContract]],
+        Cls: Callable,
+        Cls_parser: Callable,
+        parser: List[FunctionSolc],
+    ) -> Dict[str, Union[FunctionContract, Modifier]]:
+        
+        all_elements = {}
+
+        try:
+
+            # If there is a constructor in the functions
+            # We remove the previous constructor
+            # As only one constructor is present per contracts
+            #
+            # Note: contract.all_functions_called returns the constructors of the base contracts
+            has_constructor = False
+            for element_parser in elements_no_params:
+                # cho nay de parse cacs bien cho function
+                element_parser.analyze_params()
+                if element_parser.underlying_function.is_constructor:
+                    has_constructor = True
+
+           
+            for element_parser in elements_no_params:
+                all_elements[
+                    element_parser.underlying_function.canonical_name
+                ] = element_parser.underlying_function
+
+        except (VariableNotFound, KeyError) as e:
+            self.log_incorrect_parsing(f"Missing params {e}")
+        return all_elements
+   

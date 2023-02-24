@@ -235,7 +235,24 @@ class StaticCompilationUnitSolc(CallerContextExpression):
         """
         This functions will parse the variable/modifier/function
         """
-        pass
+        for lib in libraries:
+            self._analyze_variables_modifiers_functions(lib)
+        
+        while contracts_to_be_analyzed:
+
+            contract = contracts_to_be_analyzed[0]
+
+            contracts_to_be_analyzed = contracts_to_be_analyzed[1:]
+            all_father_analyzed = all(
+                self._underlying_contract_to_parser[father].is_analyzed
+                for father in contract.underlying_contract.inheritance
+            )
+
+            if not contract.underlying_contract.inheritance or all_father_analyzed:
+                self._analyze_variables_modifiers_functions(contract)
+
+            else:
+                contracts_to_be_analyzed += [contract]
     
     def _parse_struct_var_modifiers_functions(self, contract: ContractSolc):
         # contract.parse_structs()
@@ -244,3 +261,20 @@ class StaticCompilationUnitSolc(CallerContextExpression):
         contract.parse_functions()
         # contract.parse_custom_errors()
         contract.set_is_analyzed(True)
+    
+    def _analyze_variables_modifiers_functions(self, contract: ContractSolc):
+        # contract.analyze_params_modifiers()
+        # ham nay de parse cac bien cho funtion
+        contract.analyze_params_functions()
+        # self._analyze_params_top_level_function()
+        # self._analyze_params_custom_error()
+
+        # contract.analyze_state_variables()
+
+        # contract.analyze_content_modifiers()
+        # cho nay de phan tich content function
+        # contract.analyze_content_functions()
+        # self._analyze_content_top_level_function()
+
+        # contract.set_is_analyzed(True)
+        pass

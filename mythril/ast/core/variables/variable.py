@@ -1,12 +1,13 @@
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Union, List
 
+from mythril.ast.core.solidity_types.type import Type
 from mythril.ast.core.source_mapping.source_mapping import SourceMapping
 
 class Variable(SourceMapping):
     def __init__(self):
         super().__init__()
         self._name: Optional[str] = None
-        # self._type: Optional[Type] = None
+        self._type: Optional[Type] = None
         self._is_constant = False
         self._is_immutable: bool = False
         self._initialized: Optional[bool] = None
@@ -23,6 +24,14 @@ class Variable(SourceMapping):
     @name.setter
     def name(self, name):
         self._name = name
+    
+    @property
+    def type(self) -> Optional[Union[Type, List[Type]]]:
+        return self._type
+
+    @type.setter
+    def type(self, types: Union[Type, List[Type]]):
+        self._type = types
     
     @property
     def is_constant(self) -> bool:

@@ -37,6 +37,7 @@ class StaticExec(StaticExecCore):
         for parser in self._parsers:
             try:
                 parser.parse_contracts()
+                print(parser.compilation_unit._all_functions)
             except Exception as e:
                 if self.no_fail:
                     continue
