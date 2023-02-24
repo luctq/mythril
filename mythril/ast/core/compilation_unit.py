@@ -27,6 +27,11 @@ class StaticCompilationUnit(Context):
     def source_units(self) -> Dict[int, str]:
         return self._source_units
 
+
+    @property
+    def solc_version(self) -> str:
+        return self._crytic_compile_compilation_unit.compiler_version.version
+
     @property
     def core(self) -> "StaticExecCore":
         return self._core

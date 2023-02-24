@@ -209,6 +209,22 @@ class ContractSolc(CallerContextExpression):
         except (VariableNotFound, KeyError) as e:
             self.log_incorrect_parsing(f"Missing params {e}")
         self._functions_no_params = []
+    
+    def analyze_content_functions(self):
+        try:
+            for function_parser in self._functions_parser:
+                function_parser.analyze_content()
+        except (VariableNotFound, KeyError, ParsingError) as e:
+            self.log_incorrect_parsing(f"Missing function {e}")
+    
+    def analyze_state_variables(self):
+        try:
+            for var_parser in self._variables_parser:
+                var_parser.analyze(self)
+            return
+        except (VariableNotFound, KeyError) as e:
+            self.log_incorrect_parsing(f"Missing state variable {e}")
+
     def _analyze_params_elements(  # pylint: disable=too-many-arguments,too-many-locals
         self,
         elements_no_params: List[FunctionSolc],

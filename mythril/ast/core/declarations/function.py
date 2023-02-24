@@ -6,9 +6,10 @@ from mythril.ast.core.solidity_types.type import Type
 from mythril.ast.core.source_mapping.source_mapping import SourceMapping
 from mythril.ast.core.variables.local_variable import LocalVariable
 from mythril.ast.core.scope.scope import FileScope
-
+from mythril.ast.core.cfg.scope import Scope
 if TYPE_CHECKING:
     from mythril.ast.core.compilation_unit import StaticCompilationUnit
+    from mythril.ast.core.cfg.node import Node, NodeType
 class FunctionType(Enum):
     NORMAL = 0
     CONSTRUCTOR = 1
@@ -31,6 +32,7 @@ class Function(SourceMapping, metaclass=ABCMeta):
         self._pure: bool = False
         self._payable: bool = False
         self._visibility: Optional[str] = None
+        self._nodes: List["Node"] = []
         self._parameters: List["LocalVariable"] = []
         self._parameters_src: SourceMapping = SourceMapping()
         self._returns: List["LocalVariable"] = []
@@ -47,6 +49,8 @@ class Function(SourceMapping, metaclass=ABCMeta):
         self._is_protected: Optional[bool] = None
 
         self.compilation_unit: "StaticCompilationUnit" = compilation_unit
+
+        self._counter_nodes = 0
 
         # Assume we are analyzing Solidity by default
         self.function_language: FunctionLanguage = FunctionLanguage.Solidity
@@ -69,6 +73,16 @@ class Function(SourceMapping, metaclass=ABCMeta):
         if self._function_type == FunctionType.CONSTRUCTOR_CONSTANT_VARIABLES:
             return "slitherConstructorConstantVariables"
         return self._name
+    @property
+    def is_checked(self) -> bool:
+        """
+        Return true if the overflow are enabled by default
+
+
+        :return:
+        """
+
+        return self.compilation_unit.solc_version >= "0.8.0"
 
     @name.setter
     def name(self, new_name: str):
@@ -236,3 +250,16 @@ class Function(SourceMapping, metaclass=ABCMeta):
     @property
     def variables_as_dict(self) -> Dict[str, LocalVariable]:
         return self._variables
+
+    def new_node(
+        self, node_type: "NodeType", src: Union[str, Dict], scope: Union[Scope, "Function"]
+    ) -> "Node":
+        from mythril.ast.core.cfg.node import Node
+
+        node = Node(node_type, self._counter_nodes, scope, self.file_scope)
+        node.set_offset(src, self.compilation_unit)
+        self._counter_nodes += 1
+        node.set_function(self)
+        self._nodes.append(node)
+
+        return node

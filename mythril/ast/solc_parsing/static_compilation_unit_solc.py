@@ -269,11 +269,11 @@ class StaticCompilationUnitSolc(CallerContextExpression):
         # self._analyze_params_top_level_function()
         # self._analyze_params_custom_error()
 
-        # contract.analyze_state_variables()
+        contract.analyze_state_variables()
 
         # contract.analyze_content_modifiers()
         # cho nay de phan tich content function
-        # contract.analyze_content_functions()
+        contract.analyze_content_functions()
         # self._analyze_content_top_level_function()
 
         # contract.set_is_analyzed(True)

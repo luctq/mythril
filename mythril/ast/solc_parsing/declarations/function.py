@@ -5,11 +5,18 @@ from mythril.ast.core.declarations.function import Function, FunctionType
 from mythril.ast.core.declarations.function_contract import FunctionContract
 from mythril.ast.core.variables.local_variable import LocalVariable
 from mythril.ast.solc_parsing.variables.local_variable import LocalVariableSolc
+from mythril.ast.core.source_mapping.source_mapping import Source
+from mythril.ast.core.cfg.node import NodeType, Node, link_nodes
+from mythril.ast.core.cfg.scope import Scope
+from mythril.ast.solc_parsing.cfg.node import NodeSolc
+from mythril.ast.solc_parsing.exceptions import ParsingError
 if TYPE_CHECKING:
     from mythril.ast.solc_parsing.declarations.contract import ContractSolc
     from mythril.ast.core.compilation_unit import StaticCompilationUnit
     from mythril.ast.solc_parsing.static_compilation_unit_solc import StaticCompilationUnitSolc
 
+def link_underlying_nodes(node1: NodeSolc, node2: NodeSolc):
+    link_nodes(node1.underlying_node, node2.underlying_node)
 class FunctionSolc(CallerContextExpression):
     
     def __init__(
@@ -40,6 +47,8 @@ class FunctionSolc(CallerContextExpression):
             int, LocalVariableSolc
         ] = {}
         self._analyze_type()
+
+        self._node_to_nodesolc: Dict[Node, NodeSolc] = {}
 
         self._local_variables_parser: List[LocalVariableSolc] = []
     
@@ -167,7 +176,14 @@ class FunctionSolc(CallerContextExpression):
 
         if "payable" in attributes:
             self._function.payable = attributes["payable"]
-    
+    def _new_node(
+        self, node_type: NodeType, src: Union[str, Source], scope: Union[Scope, "Function"]
+    ) -> NodeSolc:
+        node = self._function.new_node(node_type, src, scope)
+        node_parser = NodeSolc(node)
+        self._node_to_nodesolc[node] = node_parser
+        return node_parser
+
     def analyze_params(self):
         # Can be re-analyzed due to inheritance
         if self._params_was_analyzed:
@@ -210,6 +226,126 @@ class FunctionSolc(CallerContextExpression):
 
         self._add_local_variable(local_var_parser)
         return local_var_parser
+    
+    def analyze_content(self):
+        if self._content_was_analyzed:
+            return
+        self._content_was_analyzed = True
+
+        if self.is_compact_ast:
+            body = self._functionNotParsed.get("body", None)
+            if body and body[self.get_key()] == "Block":
+                self._function.is_implemented = True
+                self._parse_cfg(body)
+            # for modifier in self._functionNotParsed["modifiers"]:
+            #     self._parse_modifier(modifier)
+        else:
+            pass
+        # for local_var_parser in self._local_variables_parser:
+        #     local_var_parser.analyze(self)
+        # for node_parser in self._node_to_nodesolc.values():
+        #     node_parser.analyze_expressions(self)
+
+    def _parse_cfg(self, cfg: Dict):
+        assert cfg[self.get_key()] == "Block"
+
+        node = self._new_node(NodeType.ENTRYPOINT, cfg["src"], self.underlying_function)
+        self._function.entry_point = node.underlying_node
+
+        if self.is_compact_ast:
+            statements = cfg["statements"]
+        else:
+            statements = cfg[self.get_children("children")]
+        if not statements:
+            self._function.is_empty = True
+        else:
+            self._function.is_empty = False
+            check_arithmetic = self.compilation_unit.solc_version >= "0.8.0"
+            self._parse_block(cfg, node, check_arithmetic=check_arithmetic)
+    def _parse_block(self, block: Dict, node: NodeSolc, check_arithmetic: bool = False):
+        """
+        Return:
+            Node
+        """
+        assert block[self.get_key()] == "Block"
+
+        if self.is_compact_ast:
+            statements = block["statements"]
+        else:
+            statements = block[self.get_children("children")]
+
+        check_arithmetic = check_arithmetic | node.underlying_node.scope.is_checked
+        new_scope = Scope(check_arithmetic, False, node.underlying_node.scope)
+        for statement in statements:
+            node = self._parse_statement(statement, node, new_scope)
+        return node 
+    def _parse_statement(
+        self, statement: Dict, node: NodeSolc, scope: Union[Scope, Function]
+    ) -> NodeSolc:
+        """
+
+        Return:
+            node
+        """
+        # Statement = IfStatement | WhileStatement | ForStatement | Block | InlineAssemblyStatement |
+        #            ( DoWhileStatement | PlaceholderStatement | Continue | Break | Return |
+        #                          Throw | EmitStatement | SimpleStatement ) ';'
+        # SimpleStatement = VariableDefinition | ExpressionStatement
+
+        name = statement[self.get_key()]
+        # SimpleStatement = VariableDefinition | ExpressionStatement
+        if name == "IfStatement":
+            pass
+        elif name == "WhileStatement":
+            pass
+        elif name == "ForStatement":
+            pass
+        elif name == "Block":
+            pass
+        elif name == "UncheckedBlock":
+            pass
+        elif name == "InlineAssembly":
+            # Added with solc 0.6 - the yul code is an AST
+            pass
+        elif name == "DoWhileStatement":
+            pass
+        # For Continue / Break / Return / Throw
+        # The is fixed later
+        elif name == "Continue":
+           pass
+        elif name == "Break":
+            pass
+        elif name == "Return":
+            pass
+        elif name == "Throw":
+            pass
+        elif name == "EmitStatement":
+            pass
+        elif name in ["VariableDefinitionStatement", "VariableDeclarationStatement"]:
+            pass
+        elif name == "ExpressionStatement":
+            # assert len(statement[self.get_children('expression')]) == 1
+            # assert not 'attributes' in statement
+            # expression = parse_expression(statement[self.get_children('children')][0], self)
+            if self.is_compact_ast:
+                expression = statement[self.get_children("expression")]
+            else:
+                expression = statement[self.get_children("expression")][0]
+            new_node = self._new_node(NodeType.EXPRESSION, statement["src"], scope)
+            new_node.add_unparsed_expression(expression)
+            link_underlying_nodes(node, new_node)
+            node = new_node
+        elif name == "TryStatement":
+            pass
+        # elif name == 'TryCatchClause':
+        #     self._parse_catch(statement, node)
+        elif name == "RevertStatement":
+            pass
+        else:
+            raise ParsingError(f"Statement not parsed {name}")
+
+        return node
+
 
     def _parse_params(self, params: Dict):
         assert params[self.get_key()] == "ParameterList"

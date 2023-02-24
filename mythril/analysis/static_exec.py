@@ -37,11 +37,13 @@ class StaticExec(StaticExecCore):
         for parser in self._parsers:
             try:
                 parser.parse_contracts()
-                print(parser.compilation_unit._all_functions)
             except Exception as e:
                 if self.no_fail:
                     continue
                 raise e
+            all_functions = parser.compilation_unit._all_functions
+            array_candidates = [x.name for function in all_functions for x in function.variables]
+            print(array_candidates)
       
         # for parser in self._parsers:
         #     try:
