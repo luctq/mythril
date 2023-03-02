@@ -191,12 +191,16 @@ class StaticCompilationUnitSolc(CallerContextExpression):
         ]
         # We first parse the struct/variables/functions/contract
         self._parse_first_part(contracts_to_be_analyzed, libraries)
+        [c.set_is_analyzed(False) for c in self._underlying_contract_to_parser.values()]
         # We analyze the struct and parse and analyze the events
         # A contract can refer in the variables a struct or a event from any contract
         # (without inheritance link)
         self._parse_second_part(contracts_to_be_analyzed, libraries)
+        [c.set_is_analyzed(False) for c in self._underlying_contract_to_parser.values()]
         # Then we analyse state variables, functions and modifiers
         self._parse_third_part(contracts_to_be_analyzed, libraries)
+        [c.set_is_analyzed(False) for c in self._underlying_contract_to_parser.values()]
+        self._parsed = True
     def _parse_first_part(
         self, 
         contracts_to_be_analyzed: List[ContractSolc], 
@@ -278,3 +282,28 @@ class StaticCompilationUnitSolc(CallerContextExpression):
 
         # contract.set_is_analyzed(True)
         pass
+    def analyze_contracts(self):  # pylint: disable=too-many-statements,too-many-branches
+        print("\n================ANALYZE CONTRACT================\n")
+        if not self._parsed:
+            raise StaticException("Parse the contract before running analyses")
+        self._convert_to_astir()
+
+        # phan duoi chua can dung den
+        # compute_dependency(self._compilation_unit)
+        # self._compilation_unit.compute_storage_layout()
+        # self._analyzed = True
+    def _convert_to_astir(self):
+       for contract in self._compilation_unit.contracts:
+            # contract.add_constructor_variables()
+            for func in contract.functions:
+                try:
+                    print("func.name", func.name)
+                    # trong nay se phan tich tao ra state variable
+                    func.generate_astir_and_analyze()
+                except AttributeError as e:
+                    # This can happens for example if there is a call to an interface
+                    # And the interface is redefined due to contract's name reuse
+                    # But the available version misses some functions
+                    self._underlying_contract_to_parser[contract].log_incorrect_parsing(
+                        f"Impossible to generate IR for {contract.name}.{func.name} ({func.source_mapping}):\n {e}"
+                    )

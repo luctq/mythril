@@ -10,6 +10,8 @@ from mythril.ast.core.cfg.node import NodeType, Node, link_nodes
 from mythril.ast.core.cfg.scope import Scope
 from mythril.ast.solc_parsing.cfg.node import NodeSolc
 from mythril.ast.solc_parsing.exceptions import ParsingError
+from mythril.ast.core.variables.local_variable_init_from_tuple import LocalVariableInitFromTuple
+from mythril.ast.solc_parsing.variables.local_variable_init_from_tuple import LocalVariableInitFromTupleSolc
 if TYPE_CHECKING:
     from mythril.ast.solc_parsing.declarations.contract import ContractSolc
     from mythril.ast.core.compilation_unit import StaticCompilationUnit
@@ -30,27 +32,39 @@ class FunctionSolc(CallerContextExpression):
         self._contract_parser = contract_parser
         self._function = function
 
-         # Only present if compact AST
+        # Only present if compact AST
         if self.is_compact_ast:
             self._function.name = function_data["name"]
             if "id" in function_data:
                 self._function.id = function_data["id"]
         else:
             self._function.name = function_data["attributes"][self.get_key()]
-        
         self._functionNotParsed = function_data
         self._params_was_analyzed = False
         self._content_was_analyzed = False
-        self._canonical_name: Optional[str] = None
-        
+
+        self._counter_scope_local_variables = 0
+        # variable renamed will map the solc id
+        # to the variable. It only works for compact format
+        # Later if an expression provides the referencedDeclaration attr
+        # we can retrieve the variable
+        # It only matters if two variables have the same name in the function
+        # which is only possible with solc > 0.5
         self._variables_renamed: Dict[
-            int, LocalVariableSolc
+            int, Union[LocalVariableSolc, LocalVariableInitFromTupleSolc]
         ] = {}
+
         self._analyze_type()
 
         self._node_to_nodesolc: Dict[Node, NodeSolc] = {}
+        # self._node_to_yulobject: Dict[Node, YulBlock] = {}
 
-        self._local_variables_parser: List[LocalVariableSolc] = []
+        self._local_variables_parser: List[
+            Union[LocalVariableSolc, LocalVariableInitFromTupleSolc]
+        ] = []
+
+        if "documentation" in function_data:
+            function.has_documentation = True
     
     @property
     def underlying_function(self) -> Function:
@@ -80,6 +94,12 @@ class FunctionSolc(CallerContextExpression):
     def is_compact_ast(self):
         return self._static_parser.is_compact_ast
     
+    @property
+    def variables_renamed(
+        self,
+    ) -> Dict[int, LocalVariableSolc]:
+        return self._variables_renamed
+
     def _add_local_variable(
         self, local_var_parser: LocalVariableSolc
     ):
@@ -241,10 +261,10 @@ class FunctionSolc(CallerContextExpression):
             #     self._parse_modifier(modifier)
         else:
             pass
-        # for local_var_parser in self._local_variables_parser:
-        #     local_var_parser.analyze(self)
-        # for node_parser in self._node_to_nodesolc.values():
-        #     node_parser.analyze_expressions(self)
+        for local_var_parser in self._local_variables_parser:
+            local_var_parser.analyze(self)
+        for node_parser in self._node_to_nodesolc.values():
+            node_parser.analyze_expressions(self)
 
     def _parse_cfg(self, cfg: Dict):
         assert cfg[self.get_key()] == "Block"

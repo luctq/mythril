@@ -1,12 +1,18 @@
 from abc import abstractmethod, ABCMeta
 from typing import Dict, TYPE_CHECKING, List, Optional, Set, Union, Callable, Tuple
 from enum import Enum
+from itertools import groupby
 
 from mythril.ast.core.solidity_types.type import Type
 from mythril.ast.core.source_mapping.source_mapping import SourceMapping
 from mythril.ast.core.variables.local_variable import LocalVariable
 from mythril.ast.core.scope.scope import FileScope
 from mythril.ast.core.cfg.scope import Scope
+from mythril.ast.core.variables.variable import Variable
+from mythril.ast.core.expressions.expression import Expression
+from mythril.ast.core.variables.state_variable import StateVariable
+from mythril.ast.core.declarations.solidity_variables import SolidityVariable, SolidityFunction
+
 if TYPE_CHECKING:
     from mythril.ast.core.compilation_unit import StaticCompilationUnit
     from mythril.ast.core.cfg.node import Node, NodeType
@@ -41,6 +47,12 @@ class Function(SourceMapping, metaclass=ABCMeta):
         self._function_type: Optional[FunctionType] = None
 
         self._variables: Dict[str, "LocalVariable"] = {}
+        self._vars_read: List["Variable"] = []
+        self._vars_written: List["Variable"] = []
+        self._state_vars_read: List["StateVariable"] = []
+        self._vars_read_or_written: List["Variable"] = []
+        self._solidity_vars_read: List["SolidityVariable"] = []
+        self._state_vars_written: List["StateVariable"] = []
         self._full_name: Optional[str] = None
         self._signature: Optional[Tuple[str, List[str], List[str]]] = None
         self._solidity_signature: Optional[str] = None
@@ -87,6 +99,17 @@ class Function(SourceMapping, metaclass=ABCMeta):
     @name.setter
     def name(self, new_name: str):
         self._name = new_name
+
+    @property
+    def nodes(self) -> List["Node"]:
+        """
+        list(Node): List of the nodes
+        """
+        return list(self._nodes)
+
+    @nodes.setter
+    def nodes(self, nodes: List["Node"]):
+        self._nodes = nodes
 
     @property
     def id(self) -> Optional[str]:
@@ -251,6 +274,57 @@ class Function(SourceMapping, metaclass=ABCMeta):
     def variables_as_dict(self) -> Dict[str, LocalVariable]:
         return self._variables
 
+    @property
+    def variables_read(self) -> List["Variable"]:
+        """
+        list(Variable): Variables read (local/state/solidity)
+        """
+        return list(self._vars_read)
+
+    @property
+    def variables_written(self) -> List["Variable"]:
+        """
+        list(Variable): Variables written (local/state/solidity)
+        """
+        return list(self._vars_written)
+
+    @property
+    def state_variables_read(self) -> List["StateVariable"]:
+        """
+        list(StateVariable): State variables read
+        """
+        print("state_variables_read")
+        return list(self._state_vars_read)
+
+    @property
+    def solidity_variables_read(self) -> List["SolidityVariable"]:
+        """
+        list(SolidityVariable): Solidity variables read
+        """
+        return list(self._solidity_vars_read)
+
+    @property
+    def state_variables_written(self) -> List["StateVariable"]:
+        """
+        list(StateVariable): State variables written
+        """
+        return list(self._state_vars_written)
+
+    @property
+    def variables_read_or_written(self) -> List["Variable"]:
+        """
+        list(Variable): Variables read or written (local/state/solidity)
+        """
+        return list(self._vars_read_or_written)
+
+    @property
+    def variables_read_as_expression(self) -> List["Expression"]:
+        return self._expression_vars_read
+
+    @property
+    def variables_written_as_expression(self) -> List["Expression"]:
+        return self._expression_vars_written
+    
     def new_node(
         self, node_type: "NodeType", src: Union[str, Dict], scope: Union[Scope, "Function"]
     ) -> "Node":
@@ -263,3 +337,102 @@ class Function(SourceMapping, metaclass=ABCMeta):
         self._nodes.append(node)
 
         return node
+    
+    def generate_astir_and_analyze(self):
+        print(len(self.nodes))
+        for node in self.nodes:
+            node.astir_generation()
+        # tim hieu cho nay
+        self._analyze_read_write()
+        # print("self.state_variables_written",  self.state_variables_written)
+        self._analyze_calls()
+    def _analyze_read_write(self):
+        """Compute variables read/written/..."""
+        write_var = [x.variables_written_as_expression for x in self.nodes]
+        write_var = [x for x in write_var if x]
+        write_var = [item for sublist in write_var for item in sublist]
+        write_var = list(set(write_var))
+        # Remove dupplicate if they share the same string representation
+        write_var = [
+            next(obj)
+            for i, obj in groupby(sorted(write_var, key=lambda x: str(x)), lambda x: str(x))
+        ]
+        self._expression_vars_written = write_var
+        write_var = [x.variables_written for x in self.nodes]
+        write_var = [x for x in write_var if x]
+        write_var = [item for sublist in write_var for item in sublist]
+        write_var = list(set(write_var))
+        # Remove dupplicate if they share the same string representation
+        write_var = [
+            next(obj)
+            for i, obj in groupby(sorted(write_var, key=lambda x: str(x)), lambda x: str(x))
+        ]
+        self._vars_written = write_var
+
+        read_var = [x.variables_read_as_expression for x in self.nodes]
+        read_var = [x for x in read_var if x]
+        read_var = [item for sublist in read_var for item in sublist]
+        # Remove dupplicate if they share the same string representation
+        read_var = [
+            next(obj)
+            for i, obj in groupby(sorted(read_var, key=lambda x: str(x)), lambda x: str(x))
+        ]
+        self._expression_vars_read = read_var
+
+        read_var = [x.variables_read for x in self.nodes]
+        read_var = [x for x in read_var if x]
+        read_var = [item for sublist in read_var for item in sublist]
+        # Remove dupplicate if they share the same string representation
+        read_var = [
+            next(obj)
+            for i, obj in groupby(sorted(read_var, key=lambda x: str(x)), lambda x: str(x))
+        ]
+        self._vars_read = read_var
+
+        self._state_vars_written = [
+            x for x in self.variables_written if isinstance(x, StateVariable)
+        ]
+        self._state_vars_read = [x for x in self.variables_read if isinstance(x, StateVariable)]
+        self._solidity_vars_read = [
+            x for x in self.variables_read if isinstance(x, SolidityVariable)
+        ]
+        self._vars_read_or_written = self._vars_written + self._vars_read
+
+        slithir_variables = [x.slithir_variables for x in self.nodes]
+        slithir_variables = [x for x in slithir_variables if x]
+        self._slithir_variables = [item for sublist in slithir_variables for item in sublist]
+
+    def _analyze_calls(self):
+        calls = [x.calls_as_expression for x in self.nodes]
+        calls = [x for x in calls if x]
+        calls = [item for sublist in calls for item in sublist]
+        self._expression_calls = list(set(calls))
+
+        internal_calls = [x.internal_calls for x in self.nodes]
+        internal_calls = [x for x in internal_calls if x]
+        internal_calls = [item for sublist in internal_calls for item in sublist]
+        self._internal_calls = list(set(internal_calls))
+
+        self._solidity_calls = [c for c in internal_calls if isinstance(c, SolidityFunction)]
+
+        low_level_calls = [x.low_level_calls for x in self.nodes]
+        low_level_calls = [x for x in low_level_calls if x]
+        low_level_calls = [item for sublist in low_level_calls for item in sublist]
+        self._low_level_calls = list(set(low_level_calls))
+
+        high_level_calls = [x.high_level_calls for x in self.nodes]
+        high_level_calls = [x for x in high_level_calls if x]
+        high_level_calls = [item for sublist in high_level_calls for item in sublist]
+        self._high_level_calls = list(set(high_level_calls))
+
+        library_calls = [x.library_calls for x in self.nodes]
+        library_calls = [x for x in library_calls if x]
+        library_calls = [item for sublist in library_calls for item in sublist]
+        self._library_calls = list(set(library_calls))
+
+        external_calls_as_expressions = [x.external_calls_as_expressions for x in self.nodes]
+        external_calls_as_expressions = [x for x in external_calls_as_expressions if x]
+        external_calls_as_expressions = [
+            item for sublist in external_calls_as_expressions for item in sublist
+        ]
+        self._external_calls_as_expressions = list(set(external_calls_as_expressions))

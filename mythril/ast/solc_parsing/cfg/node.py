@@ -1,6 +1,11 @@
 from typing import Optional, Dict
 from mythril.ast.core.cfg.node import NodeType, Node
-
+from mythril.ast.solc_parsing.expressions.expression_parsing import parse_expression
+from mythril.ast.core.expressions.assignment_operation import AssignmentOperation, AssignmentOperationType
+from mythril.ast.core.expressions.identifier import Identifier
+from mythril.ast.core.expressions.read_var import ReadVar
+from mythril.ast.core.expressions.write_var import WriteVar
+from mythril.ast.core.expressions.find_calls import FindCalls
 class NodeSolc:
     def __init__(self, node: Node):
         self._unparsed_expression: Optional[Dict] = None
@@ -18,12 +23,13 @@ class NodeSolc:
         if self._node.type == NodeType.VARIABLE and not self._node.expression:
             self._node.add_expression(self._node.variable_declaration.expression)
         if self._unparsed_expression:
+            print("self._unparsed_expression")
             expression = parse_expression(self._unparsed_expression, caller_context)
+            print("==============expression=====================", expression)
             self._node.add_expression(expression)
             # self._unparsed_expression = None
 
         if self._node.expression:
-
             if self._node.type == NodeType.VARIABLE:
                 # Update the expression to be an assignement to the variable
                 _expression = AssignmentOperation(

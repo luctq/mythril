@@ -3,6 +3,7 @@ from mythril.ast.core.variables.variable import Variable
 from mythril.ast.solc_parsing.exceptions import ParsingError
 from mythril.ast.solc_parsing.declarations.caller_context import CallerContextExpression
 from mythril.ast.solc_parsing.solidity_types.type_parsing import parse_type
+from mythril.ast.solc_parsing.expressions.expression_parsing import parse_expression
 
 class MultipleVariablesDeclaration(Exception):
     """
@@ -121,6 +122,6 @@ class VariableDeclarationSolc:
             self._variable.type = parse_type(self._elem_to_parse, caller_context)
             self._elem_to_parse = None
 
-        # if self._variable.initialized:
-        #     self._variable.expression = parse_expression(self._initializedNotParsed, caller_context)
-        #     self._initializedNotParsed = None
+        if self._variable.initialized:
+            self._variable.expression = parse_expression(self._initializedNotParsed, caller_context)
+            self._initializedNotParsed = None
