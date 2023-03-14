@@ -35,6 +35,7 @@ class StaticCompilationUnitSolc(CallerContextExpression):
         self._all_functions_and_modifier_parser: List[FunctionSolc] = []
 
         self._top_level_contracts_counter = 0
+
     @property
     def compilation_unit(self) -> StaticCompilationUnit:
         return self._compilation_unit
@@ -141,7 +142,6 @@ class StaticCompilationUnitSolc(CallerContextExpression):
         if data[self.get_key()] != "SourceUnit":
             return
         name_candidates = re.findall("=+ (.+) =+", filename)
-        print("name_candidates", name_candidates)
         if name_candidates:
             assert len(name_candidates) == 1
             name: str = name_candidates[0]
@@ -149,7 +149,6 @@ class StaticCompilationUnitSolc(CallerContextExpression):
             name = filename
         sourceUnit = -1  # handle old solc, or error
         if "src" in data:
-            print("data[src]", data["src"])
             sourceUnit_candidates = re.findall("[0-9]*:[0-9]*:([0-9]*)", data["src"])
             if len(sourceUnit_candidates) == 1:
                 sourceUnit = int(sourceUnit_candidates[0])
@@ -201,6 +200,7 @@ class StaticCompilationUnitSolc(CallerContextExpression):
         self._parse_third_part(contracts_to_be_analyzed, libraries)
         [c.set_is_analyzed(False) for c in self._underlying_contract_to_parser.values()]
         self._parsed = True
+    
     def _parse_first_part(
         self, 
         contracts_to_be_analyzed: List[ContractSolc], 
@@ -288,7 +288,6 @@ class StaticCompilationUnitSolc(CallerContextExpression):
             raise StaticException("Parse the contract before running analyses")
         self._convert_to_astir()
 
-        # phan duoi chua can dung den
         # compute_dependency(self._compilation_unit)
         # self._compilation_unit.compute_storage_layout()
         # self._analyzed = True
@@ -296,9 +295,7 @@ class StaticCompilationUnitSolc(CallerContextExpression):
        for contract in self._compilation_unit.contracts:
             # contract.add_constructor_variables()
             for func in contract.functions:
-                try:
-                    print("func.name", func.name)
-                    # trong nay se phan tich tao ra state variable
+                try: 
                     func.generate_astir_and_analyze()
                 except AttributeError as e:
                     # This can happens for example if there is a call to an interface

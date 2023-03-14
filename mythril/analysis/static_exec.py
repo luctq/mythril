@@ -1,29 +1,30 @@
-from typing import Union, List
+from typing import Union, List, Optional
 from crytic_compile import CryticCompile, InvalidCompilation
 
 from mythril.exceptions import StaticError
 from mythril.ast.core.static_exec_core import StaticExecCore
 from mythril.ast.solc_parsing.static_compilation_unit_solc import StaticCompilationUnitSolc
 from mythril.ast.core.compilation_unit import StaticCompilationUnit
+from mythril.analysis.module import ModuleLoader, EntryPoint
+from mythril.analysis.module.base import ModuleType
 class StaticExec(StaticExecCore):
     """
     Execute static analyze smart contract
     """ 
-    def __init__(self, target: Union[str, CryticCompile], **kwargs):
+    def __init__(self,
+                 target: Union[str, CryticCompile], modules: Optional[List[str]] = None, **kwargs):
         super().__init__()
         self._parsers: List[StaticCompilationUnitSolc] = [] 
         try:
             if isinstance(target, CryticCompile):
                 crytic_compile = target
             else:
+                self.filename = target
                 crytic_compile = CryticCompile(target, **kwargs)
             self._crytic_compile = crytic_compile
         except InvalidCompilation as e:
-            # pylint: disable=raise-missing-from
             raise StaticError(f"Invalid compilation: \n{str(e)}")
         for compilation_unit in crytic_compile.compilation_units.values():
-            for path, ast in compilation_unit.asts.items():
-                print(f"\npath: {path}, ast: {ast}\n")
             compilation_unit_static = StaticCompilationUnit(self, compilation_unit)
             self._compilation_units.append(compilation_unit_static)
             parser = StaticCompilationUnitSolc(compilation_unit_static)
@@ -32,7 +33,12 @@ class StaticExec(StaticExecCore):
                 parser.parse_top_level_from_loaded_json(ast, path) # dong nay quan trong
                 self.add_source_code(path)
             # _update_file_scopes(compilation_unit_static.scopes.values())
-            self._init_parsing_and_analyses()
+        self._init_parsing_and_analyses()
+        for module in ModuleLoader().get_detection_modules(EntryPoint.CALLBACK, modules):
+            if module.type == ModuleType.STATIC:
+                module.set_up(parser.compilation_unit)
+                module.execute_static()
+
     def _init_parsing_and_analyses(self) -> None:
         for parser in self._parsers:
             try:
@@ -41,15 +47,11 @@ class StaticExec(StaticExecCore):
                 if self.no_fail:
                     continue
                 raise e
-            all_functions = parser.compilation_unit._all_functions
-            array_candidates = [x.name for function in all_functions for x in function.variables]
-            print(array_candidates)
-      
-        # for parser in self._parsers:
-        #     try:
-        #         parser.analyze_contracts()
-        #     except Exception as e:
-        #         if self.no_fail:
-        #             continue
-        #         raise e
+        for parser in self._parsers:
+            try:
+                parser.analyze_contracts()
+            except Exception as e:
+                if self.no_fail:
+                    continue
+                raise e
             

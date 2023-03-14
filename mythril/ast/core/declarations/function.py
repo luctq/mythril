@@ -16,6 +16,44 @@ from mythril.ast.core.declarations.solidity_variables import SolidityVariable, S
 if TYPE_CHECKING:
     from mythril.ast.core.compilation_unit import StaticCompilationUnit
     from mythril.ast.core.cfg.node import Node, NodeType
+    from mythril.ast.utils.type_helpers import (
+            InternalCallType, 
+            LowLevelCallType, 
+            HighLevelCallType, 
+            LibraryCallType)
+    from mythril.ast.core.declarations.contract import Contract
+
+class ModifierStatements:
+    def __init__(
+        self,
+        modifier: Union["Contract", "Function"],
+        entry_point: "Node",
+        nodes: List["Node"],
+    ):
+        self._modifier = modifier
+        self._entry_point = entry_point
+        self._nodes = nodes
+
+    @property
+    def modifier(self) -> Union["Contract", "Function"]:
+        return self._modifier
+
+    @property
+    def entry_point(self) -> "Node":
+        return self._entry_point
+
+    @entry_point.setter
+    def entry_point(self, entry_point: "Node"):
+        self._entry_point = entry_point
+
+    @property
+    def nodes(self) -> List["Node"]:
+        return self._nodes
+
+    @nodes.setter
+    def nodes(self, nodes: List["Node"]):
+        self._nodes = nodes
+
 class FunctionType(Enum):
     NORMAL = 0
     CONSTRUCTOR = 1
@@ -46,6 +84,12 @@ class Function(SourceMapping, metaclass=ABCMeta):
 
         self._function_type: Optional[FunctionType] = None
 
+        self._all_internals_calls: Optional[List["InternalCallType"]] = None
+        self._all_high_level_calls: Optional[List["HighLevelCallType"]] = None
+        self._all_library_calls: Optional[List["LibraryCallType"]] = None
+        self._all_low_level_calls: Optional[List["LowLevelCallType"]] = None
+        self._all_solidity_calls: Optional[List["SolidityFunction"]] = None
+
         self._variables: Dict[str, "LocalVariable"] = {}
         self._vars_read: List["Variable"] = []
         self._vars_written: List["Variable"] = []
@@ -59,6 +103,10 @@ class Function(SourceMapping, metaclass=ABCMeta):
         self._signature_str: Optional[str] = None
         self._canonical_name: Optional[str] = None
         self._is_protected: Optional[bool] = None
+        self._is_implemented: Optional[bool] = None
+        self._modifiers: List[ModifierStatements] = []
+        self._is_shadowed: bool = False
+        self._shadows: bool = False
 
         self.compilation_unit: "StaticCompilationUnit" = compilation_unit
 
@@ -110,6 +158,24 @@ class Function(SourceMapping, metaclass=ABCMeta):
     @nodes.setter
     def nodes(self, nodes: List["Node"]):
         self._nodes = nodes
+    @property
+    def is_shadowed(self) -> bool:
+        return self._is_shadowed
+
+    @is_shadowed.setter
+    def is_shadowed(self, is_shadowed):
+        self._is_shadowed = is_shadowed
+
+    @property
+    def is_implemented(self) -> bool:
+        """
+        bool: True if the function is implemented
+        """
+        return self._is_implemented
+
+    @is_implemented.setter
+    def is_implemented(self, is_impl: bool):
+        self._is_implemented = is_impl
 
     @property
     def id(self) -> Optional[str]:
@@ -138,13 +204,42 @@ class Function(SourceMapping, metaclass=ABCMeta):
     @function_type.setter
     def function_type(self, t: FunctionType):
         self._function_type = t
-    
+
     @property
     def is_constructor(self) -> bool:
         """
         bool: True if the function is the constructor
         """
         return self._function_type == FunctionType.CONSTRUCTOR
+
+    @property
+    def is_constructor_variables(self) -> bool:
+        """
+        bool: True if the function is the constructor of the variables
+        Slither has inbuilt functions to hold the state variables initialization
+        """
+        return self._function_type in [
+            FunctionType.CONSTRUCTOR_VARIABLES,
+            FunctionType.CONSTRUCTOR_CONSTANT_VARIABLES,
+        ]
+
+    @property
+    def is_fallback(self) -> bool:
+        """
+            Determine if the function is the fallback function for the contract
+        Returns
+            (bool)
+        """
+        return self._function_type == FunctionType.FALLBACK
+
+    @property
+    def is_receive(self) -> bool:
+        """
+            Determine if the function is the receive function for the contract
+        Returns
+            (bool)
+        """
+        return self._function_type == FunctionType.RECEIVE
 
     @property
     def payable(self) -> bool:
@@ -215,6 +310,123 @@ class Function(SourceMapping, metaclass=ABCMeta):
         list(LocalVariable): List of the parameters
         """
         return list(self._parameters)
+    @property
+    def internal_calls(self) -> List["InternalCallType"]:
+        """
+        list(Function or SolidityFunction): List of function calls (that does not create a transaction)
+        """
+        return list(self._internal_calls)
+
+    @property
+    def solidity_calls(self) -> List[SolidityFunction]:
+        """
+        list(SolidityFunction): List of Soldity calls
+        """
+        return list(self._solidity_calls)
+
+    @property
+    def high_level_calls(self) -> List["HighLevelCallType"]:
+        """
+        list((Contract, Function|Variable)):
+        List of high level calls (external calls).
+        A variable is called in case of call to a public state variable
+        Include library calls
+        """
+        return list(self._high_level_calls)
+
+    @property
+    def library_calls(self) -> List["LibraryCallType"]:
+        """
+        list((Contract, Function)):
+        """
+        return list(self._library_calls)
+
+    @property
+    def low_level_calls(self) -> List["LowLevelCallType"]:
+        """
+        list((Variable|SolidityVariable, str)): List of low_level call
+        A low level call is defined by
+        - the variable called
+        - the name of the function (call/delegatecall/codecall)
+        """
+        return list(self._low_level_calls)
+    def all_internal_calls(self) -> List["InternalCallType"]:
+        """recursive version of internal_calls"""
+        if self._all_internals_calls is None:
+            self._all_internals_calls = self._explore_functions(lambda x: x.internal_calls)
+        return self._all_internals_calls
+
+    def all_low_level_calls(self) -> List["LowLevelCallType"]:
+        """recursive version of low_level calls"""
+        if self._all_low_level_calls is None:
+            self._all_low_level_calls = self._explore_functions(lambda x: x.low_level_calls)
+        return self._all_low_level_calls
+
+    def all_high_level_calls(self) -> List["HighLevelCallType"]:
+        """recursive version of high_level calls"""
+        if self._all_high_level_calls is None:
+            self._all_high_level_calls = self._explore_functions(lambda x: x.high_level_calls)
+        return self._all_high_level_calls
+
+    def all_library_calls(self) -> List["LibraryCallType"]:
+        """recursive version of library calls"""
+        if self._all_library_calls is None:
+            self._all_library_calls = self._explore_functions(lambda x: x.library_calls)
+        return self._all_library_calls
+
+    def all_solidity_calls(self) -> List[SolidityFunction]:
+        """recursive version of solidity calls"""
+        if self._all_solidity_calls is None:
+            self._all_solidity_calls = self._explore_functions(lambda x: x.solidity_calls)
+        return self._all_solidity_calls
+
+    @property
+    def modifiers(self) -> List[Union["Contract", "Function"]]:
+        """
+        list(Modifier): List of the modifiers
+        Can be contract for constructor's calls
+
+        """
+        return [c.modifier for c in self._modifiers]
+    def all_internal_calls(self) -> List["InternalCallType"]:
+        """recursive version of internal_calls"""
+        if self._all_internals_calls is None:
+            self._all_internals_calls = self._explore_functions(lambda x: x.internal_calls)
+        return self._all_internals_calls
+    
+    def _explore_functions(self, f_new_values: Callable[["Function"], List]):
+        values = f_new_values(self)
+        explored = [self]
+        to_explore = [
+            c for c in self.internal_calls if isinstance(c, Function) and c not in explored
+        ]
+        to_explore += [
+            c for (_, c) in self.library_calls if isinstance(c, Function) and c not in explored
+        ]
+        to_explore += [m for m in self.modifiers if m not in explored]
+
+        while to_explore:
+            f = to_explore[0]
+            to_explore = to_explore[1:]
+            if f in explored:
+                continue
+            explored.append(f)
+
+            values += f_new_values(f)
+
+            to_explore += [
+                c
+                for c in f.internal_calls
+                if isinstance(c, Function) and c not in explored and c not in to_explore
+            ]
+            to_explore += [
+                c
+                for (_, c) in f.library_calls
+                if isinstance(c, Function) and c not in explored and c not in to_explore
+            ]
+            to_explore += [m for m in f.modifiers if m not in explored and m not in to_explore]
+
+        return list(set(values))
 
     def add_parameters(self, p: "LocalVariable"):
         self._parameters.append(p)
@@ -293,7 +505,6 @@ class Function(SourceMapping, metaclass=ABCMeta):
         """
         list(StateVariable): State variables read
         """
-        print("state_variables_read")
         return list(self._state_vars_read)
 
     @property
@@ -339,7 +550,6 @@ class Function(SourceMapping, metaclass=ABCMeta):
         return node
     
     def generate_astir_and_analyze(self):
-        print(len(self.nodes))
         for node in self.nodes:
             node.astir_generation()
         # tim hieu cho nay
@@ -398,9 +608,9 @@ class Function(SourceMapping, metaclass=ABCMeta):
         ]
         self._vars_read_or_written = self._vars_written + self._vars_read
 
-        slithir_variables = [x.slithir_variables for x in self.nodes]
-        slithir_variables = [x for x in slithir_variables if x]
-        self._slithir_variables = [item for sublist in slithir_variables for item in sublist]
+        astir_variables = [x.astir_variables for x in self.nodes]
+        astir_variables = [x for x in astir_variables if x]
+        self._astir_variables = [item for sublist in astir_variables for item in sublist]
 
     def _analyze_calls(self):
         calls = [x.calls_as_expression for x in self.nodes]
@@ -436,3 +646,6 @@ class Function(SourceMapping, metaclass=ABCMeta):
             item for sublist in external_calls_as_expressions for item in sublist
         ]
         self._external_calls_as_expressions = list(set(external_calls_as_expressions))
+
+    def __str__(self):
+        return self.name
