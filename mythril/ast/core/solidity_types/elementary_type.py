@@ -156,3 +156,18 @@ class ElementaryType(Type):
         elif t == "byte":
             t = "bytes1"
         self._type = t
+    
+    @property
+    def is_dynamic(self) -> bool:
+        return self._type in ("bytes", "string")
+
+    @property
+    def type(self) -> str:
+        return self._type
+
+    @property
+    def name(self) -> str:
+        return self.type
+    
+    def __str__(self):
+        return self._type

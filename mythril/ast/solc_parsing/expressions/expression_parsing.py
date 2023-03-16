@@ -250,38 +250,31 @@ def parse_expression(expression: Dict, caller_context: CallerContextExpression) 
         return identifier
 
     if name == "IndexAccess":
-       print("debug 3")
        return Expression
        pass
 
     if name == "MemberAccess":
-       print("debug 4")
        return Expression
        pass
     if name == "ElementaryTypeNameExpression":
-       print("debug 5")
        return Expression
        pass
 
     # NewExpression is not a root expression, it's always the child of another expression
     if name == "NewExpression":
-        print("debug 6")
         return Expression
         pass
 
     if name == "ModifierInvocation":
-        print("debug 7")
         return Expression
         pass
 
     if name == "IndexRangeAccess":
-        print("debug 8")
         return Expression
         pass
 
     # Introduced with solc 0.8
     if name == "IdentifierPath":
-        print("debug 9")
         return Expression
         pass
 

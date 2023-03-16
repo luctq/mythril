@@ -20,7 +20,9 @@ from mythril.analysis.module.modules.state_change_external_calls import (
 from mythril.analysis.module.modules.suicide import AccidentallyKillable
 from mythril.analysis.module.modules.unchecked_retval import UncheckedRetval
 from mythril.analysis.module.modules.user_assertions import UserAssertions
-
+from mythril.analysis.module.modules.static_detect.unused_variables import UnusedVariables
+from mythril.analysis.module.modules.static_detect.unused_function import UnusedFunction
+from mythril.analysis.module.modules.static_detect.predeclaration_usage_local import PredeclarationUsageLocal
 from mythril.analysis.module.base import EntryPoint
 
 from mythril.exceptions import DetectorNotFoundError
@@ -104,5 +106,8 @@ class ModuleLoader(object, metaclass=Singleton):
                 AccidentallyKillable(),
                 UncheckedRetval(),
                 UserAssertions(),
+                UnusedVariables(),
+                UnusedFunction(),
+                PredeclarationUsageLocal(),
             ]
         )

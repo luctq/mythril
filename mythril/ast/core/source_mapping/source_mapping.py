@@ -20,6 +20,28 @@ class Source:
         self.end: int = 0
         self.compilation_unit: Optional["StaticCompilationUnit"] = None
 
+    def _get_lines_str(self, line_descr=""):
+
+        # If the compilation unit was not initialized, it means that the set_offset was never called
+        # on the corresponding object, which should not happen
+        assert self.compilation_unit is not None
+
+        line_prefix = self.compilation_unit.core.line_prefix
+
+        lines = self.lines
+        if not lines:
+            lines = ""
+        elif len(lines) == 1:
+            lines = f"{line_prefix}{line_descr}{lines[0]}"
+        else:
+            lines = f"{line_prefix}{line_descr}{lines[0]}-{line_descr}{lines[-1]}"
+        return lines
+    
+    def __str__(self) -> str:
+        lines = self._get_lines_str()
+        filename_short: str = self.filename.short if self.filename.short else ""
+        return f"{filename_short}{lines}"
+
 def _compute_line(
     compilation_unit: "StaticCompilationUnit", filename: Filename, start: int, length: int
 ) -> Tuple[List[int], int, int]:

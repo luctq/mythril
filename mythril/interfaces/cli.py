@@ -843,9 +843,9 @@ def execute_command(
                 )
                 outputs = {
                     "json": report.as_json(),
-                    "jsonv2": report.as_swc_standard_format(),
+                    # "jsonv2": report.as_swc_standard_format(),
                     "text": report.as_text(),
-                    "markdown": report.as_markdown(),
+                    # "markdown": report.as_markdown(),
                 }
                 print(outputs[args.outform])
                 if len(report.issues) > 0:

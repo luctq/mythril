@@ -117,7 +117,6 @@ class VariableDeclarationSolc:
         if self._was_analyzed:
             return
         self._was_analyzed = True
-        print("self._elem_to_parse", self._elem_to_parse)
         if self._elem_to_parse:
             self._variable.type = parse_type(self._elem_to_parse, caller_context)
             self._elem_to_parse = None

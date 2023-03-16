@@ -14,3 +14,16 @@ class Literal(Expression):
         self._value = value
         self._type = custom_type
         self._subdenomination = subdenomination
+    
+    @property
+    def value(self) -> Union[int, str]:
+        return self._value
+    
+    @property
+    def type(self) -> "Type":
+        return self._type
+
+    @property
+    def subdenomination(self) -> Optional[str]:
+        return self._subdenomination
+

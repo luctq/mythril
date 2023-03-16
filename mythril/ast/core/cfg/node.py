@@ -16,14 +16,8 @@ from mythril.ast.astir.operations.operation import Operation
 from mythril.ast.astir.convert import convert_expression
 from mythril.ast.astir.operations.index import Index
 from mythril.ast.astir.operations.member import Member
-from mythril.ast.astir.operations.phi import Phi
 from mythril.ast.astir.operations.lvalue import OperationWithLValue
 from mythril.ast.astir.operations.length import Length
-from mythril.ast.astir.operations.interal_call import InternalCall
-from mythril.ast.astir.operations.solidity_call import SolidityCall
-from mythril.ast.astir.operations.low_level_call import LowLevelCall
-from mythril.ast.astir.operations.high_level_call import HighLevelCall
-from mythril.ast.astir.operations.library_call import LibraryCall
 from mythril.ast.astir.variables.reference import ReferenceVariable
 from mythril.ast.astir.variables.constant import Constant
 from mythril.ast.astir.variables.temporary import TemporaryVariable
@@ -108,11 +102,15 @@ class Node(SourceMapping, ChildFunction):
         self._expression_vars_read: List[Expression] = []
         self._expression_calls: List[Expression] = []
 
-        self._slithir_vars: Set["AstIRVariable"] = set()  
+        self._astir_vars: Set["AstIRVariable"] = set()  
 
         self._expression: Optional[Expression] = None
+        self._variable_declaration: Optional[LocalVariable] = None
+
         self.scope: Union["Scope", "Function"] = scope
         self._irs: List[Operation] = []
+
+        self._is_local_variable_declaration = False
 
     def add_father(self, father: "Node"):
         """Add a father node
@@ -188,8 +186,8 @@ class Node(SourceMapping, ChildFunction):
         self._expression_vars_written = exprs
     
     @property
-    def slithir_variables(self) -> List["AstIRVariable"]:
-        return list(self._slithir_vars)
+    def astir_variables(self) -> List["AstIRVariable"]:
+        return list(self._astir_vars)
     
     @property
     def solidity_variables_read(self) -> List[SolidityVariable]:
@@ -302,7 +300,16 @@ class Node(SourceMapping, ChildFunction):
             list(Node): list of sons
         """
         return list(self._sons)
-    
+
+    @property
+    def compilation_unit(self) -> "SlitherCompilationUnit":
+        return self.function.compilation_unit
+
+    @property
+    def node_id(self) -> int:
+        """Unique node id."""
+        return self._node_id
+
     @property
     def type(self) -> NodeType:
         """
@@ -323,55 +330,77 @@ class Node(SourceMapping, ChildFunction):
     
     @property
     def irs(self) -> List[Operation]:
-        """Returns the slithIR representation
+        """Returns the astIR representation
 
         return
-            list(slithIR.Operation)
+            list(astIR.Operation)
         """
         return self._irs
     
     @staticmethod
-    def _is_non_slithir_var(var: Variable):
+    def _is_non_astir_var(var: Variable):
         return not isinstance(var, (Constant, ReferenceVariable, TemporaryVariable, TupleVariable))
 
     @staticmethod
-    def _is_valid_slithir_var(var: Variable):
+    def _is_valid_astir_var(var: Variable):
         return isinstance(var, (ReferenceVariable, TemporaryVariable, TupleVariable))
+
+    @property
+    def is_local_variable_declaration(self) -> bool:
+        return self._is_local_variable_declaration
+    
+    @is_local_variable_declaration.setter
+    def is_local_variable_declaration(self, is_local_variable_declaration: bool):
+        self._is_local_variable_declaration = is_local_variable_declaration
+
 
     def add_expression(self, expression: Expression, bypass_verif_empty: bool = False):
         assert self._expression is None or bypass_verif_empty
         self._expression = expression
+
+    def add_variable_declaration(self, var: LocalVariable):
+        assert self._variable_declaration is None
+        self._variable_declaration = var
+        if var.expression:
+            self._vars_written += [var]
+            self._local_vars_written += [var]
+    
+    @property
+    def variable_declaration(self) -> Optional[LocalVariable]:
+        """
+        Returns:
+            LocalVariable
+        """
+        return self._variable_declaration
     
     def astir_generation(self):
-        print(self.expression)
+
         if self.expression:
             expression = self.expression
             self._irs = convert_expression(expression, self)
-        print("self._irs", self._irs)
         self._find_read_write_call()
     
     def _find_read_write_call(self):  # pylint: disable=too-many-statements
         for ir in self.irs:
 
-            self._slithir_vars |= {v for v in ir.read if self._is_valid_slithir_var(v)}
-            print("self._slithir_vars", self._slithir_vars)
+            self._astir_vars |= {v for v in ir.read if self._is_valid_astir_var(v)}
             if isinstance(ir, OperationWithLValue):
                 var = ir.lvalue
-                if var and self._is_valid_slithir_var(var):
-                    self._slithir_vars.add(var)
+                if var and self._is_valid_astir_var(var):
+                    self._astir_vars.add(var)
 
-            if not isinstance(ir, (Phi, Index, Member)):
-                self._vars_read += [v for v in ir.read if self._is_non_slithir_var(v)]
+            if not isinstance(ir, (Index, Member)):
+                self._vars_read += [v for v in ir.read if self._is_non_astir_var(v)]
                 for var in ir.read:
                     if isinstance(var, ReferenceVariable):
                         self._vars_read.append(var.points_to_origin)
             elif isinstance(ir, (Member, Index)):
                 var = ir.variable_left if isinstance(ir, Member) else ir.variable_right
-                if self._is_non_slithir_var(var):
+                if self._is_non_astir_var(var):
                     self._vars_read.append(var)
                 if isinstance(var, ReferenceVariable):
                     origin = var.points_to_origin
-                    if self._is_non_slithir_var(origin):
+                    if self._is_non_astir_var(origin):
                         self._vars_read.append(origin)
 
             if isinstance(ir, OperationWithLValue):
@@ -380,37 +409,8 @@ class Node(SourceMapping, ChildFunction):
                 var = ir.lvalue
                 if isinstance(var, ReferenceVariable):
                     var = var.points_to_origin
-                if var and self._is_non_slithir_var(var):
-                    print("hello")
+                if var and self._is_non_astir_var(var) and not ir.node.is_local_variable_declaration:
                     self._vars_written.append(var)
-
-            if isinstance(ir, InternalCall):
-                self._internal_calls.append(ir.function)
-            if isinstance(ir, SolidityCall):
-                # TODO: consider removing dependancy of solidity_call to internal_call
-                self._solidity_calls.append(ir.function)
-                self._internal_calls.append(ir.function)
-            if isinstance(ir, LowLevelCall):
-                assert isinstance(ir.destination, (Variable, SolidityVariable))
-                self._low_level_calls.append((ir.destination, ir.function_name.value))
-            elif isinstance(ir, HighLevelCall) and not isinstance(ir, LibraryCall):
-                if isinstance(ir.destination.type, Contract):
-                    self._high_level_calls.append((ir.destination.type, ir.function))
-                elif ir.destination == SolidityVariable("this"):
-                    self._high_level_calls.append((self.function.contract, ir.function))
-                else:
-                    try:
-                        self._high_level_calls.append((ir.destination.type.type, ir.function))
-                    except AttributeError as error:
-                        #  pylint: disable=raise-missing-from
-                        raise StaticException(
-                            f"Function not found on IR: {ir}.\nNode: {self} ({self.source_mapping})\nFunction: {self.function}\nPlease try compiling with a recent Solidity version. {error}"
-                        )
-            elif isinstance(ir, LibraryCall):
-                assert isinstance(ir.destination, Contract)
-                assert isinstance(ir.function, Function)
-                self._high_level_calls.append((ir.destination, ir.function))
-                self._library_calls.append((ir.destination, ir.function))
 
         self._vars_read = list(set(self._vars_read))
         self._state_vars_read = [v for v in self._vars_read if isinstance(v, StateVariable)]
@@ -419,12 +419,15 @@ class Node(SourceMapping, ChildFunction):
         self._vars_written = list(set(self._vars_written))
         self._state_vars_written = [v for v in self._vars_written if isinstance(v, StateVariable)]
         self._local_vars_written = [v for v in self._vars_written if isinstance(v, LocalVariable)]
-        self._internal_calls = list(set(self._internal_calls))
-        self._solidity_calls = list(set(self._solidity_calls))
-        self._high_level_calls = list(set(self._high_level_calls))
-        self._library_calls = list(set(self._library_calls))
-        self._low_level_calls = list(set(self._low_level_calls))
-        print("self._vars_written", self._vars_written)
+    
+    def __str__(self):
+        additional_info = ""
+        if self.expression:
+            additional_info += " " + str(self.expression)
+        elif self.variable_declaration:
+            additional_info += " " + str(self.variable_declaration)
+        txt = str(self._node_type) + additional_info
+        return txt
 
 def link_nodes(node1: Node, node2: Node):
     node1.add_son(node2)

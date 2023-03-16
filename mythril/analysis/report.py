@@ -15,6 +15,7 @@ from mythril.support.source_support import Source
 from mythril.support.start_time import StartTime
 from mythril.support.support_utils import get_code_hash
 from mythril.support.signatures import SignatureDB
+from mythril.analysis.warning_issue import WarningIssues
 from time import time
 
 log = logging.getLogger(__name__)
@@ -263,20 +264,21 @@ class Report:
         :return:
         """
         issue_list = [issue.as_dict for key, issue in self.issues.items()]
-        return sorted(issue_list, key=operator.itemgetter("address", "title"))
-
+        # return sorted(issue_list, key=operator.itemgetter("address", "title"))
+        return sorted(issue_list, key=operator.itemgetter("severity", "title"))
     def append_issue(self, issue):
         """
 
         :param issue:
         """
         m = hashlib.md5()
-        m.update(
-            (issue.contract + issue.function + str(issue.address) + issue.title).encode(
-                "utf-8"
+        if not isinstance(issue, WarningIssues):
+            m.update(
+                (issue.contract + issue.function + str(issue.address) + issue.title).encode(
+                    "utf-8"
+                )
             )
-        )
-        issue.resolve_function_names()
+            issue.resolve_function_names()
         self.issues[m.digest()] = issue
 
     def as_text(self):

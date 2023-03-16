@@ -263,7 +263,6 @@ class ContractSolc(CallerContextExpression):
                 Cls_parser,
                 self._functions_parser,
             )
-            print("analyze_params_functions", functions)
             self._contract.set_functions(functions)
         except (VariableNotFound, KeyError) as e:
             self.log_incorrect_parsing(f"Missing params {e}")

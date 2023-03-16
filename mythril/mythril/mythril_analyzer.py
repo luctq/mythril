@@ -21,6 +21,7 @@ from mythril.support.start_time import StartTime
 from mythril.exceptions import DetectorNotFoundError
 from mythril.laser.execution_info import ExecutionInfo
 from mythril.analysis.static_exec import StaticExec
+from mythril.analysis.warning_issue import WarningIssues
 
 log = logging.getLogger(__name__)
 
@@ -139,25 +140,26 @@ class MythrilAnalyzer:
         for contract in self.contracts:
             StartTime()  # Reinitialize start time for new contracts
             try:
-                static = StaticExec(contract.input_file)
-                # sym = SymExecWrapper(
-                #     contract,
-                #     self.address,
-                #     self.strategy,
-                #     dynloader=DynLoader(self.eth, active=self.use_onchain_data),
-                #     max_depth=self.max_depth,
-                #     execution_timeout=self.execution_timeout,
-                #     loop_bound=self.loop_bound,
-                #     create_timeout=self.create_timeout,
-                #     transaction_count=transaction_count,
-                #     modules=modules,
-                #     compulsory_statespace=False,
-                #     disable_dependency_pruning=self.disable_dependency_pruning,
-                #     custom_modules_directory=self.custom_modules_directory,
-                # )
-                # issues = fire_lasers(sym, modules)
-                # execution_info = sym.execution_info
-                issues = []
+                static = StaticExec(contract.input_file,modules=modules)
+
+                sym = SymExecWrapper(
+                    contract,
+                    self.address,
+                    self.strategy,
+                    dynloader=DynLoader(self.eth, active=self.use_onchain_data),
+                    max_depth=self.max_depth,
+                    execution_timeout=self.execution_timeout,
+                    loop_bound=self.loop_bound,
+                    create_timeout=self.create_timeout,
+                    transaction_count=transaction_count,
+                    modules=modules,
+                    compulsory_statespace=False,
+                    disable_dependency_pruning=self.disable_dependency_pruning,
+                    custom_modules_directory=self.custom_modules_directory,
+                )
+                issues = fire_lasers(sym, modules)
+                execution_info = sym.execution_info
+                # issues = []
             except DetectorNotFoundError as e:
                 # Bubble up
                 raise e
@@ -172,7 +174,8 @@ class MythrilAnalyzer:
                 issues = retrieve_callback_issues(modules)
                 exceptions.append(traceback.format_exc())
             for issue in issues:
-                issue.add_code_info(contract)
+                if not isinstance(issue, WarningIssues):
+                    issue.add_code_info(contract)
 
             all_issues += issues
             log.info("Solver statistics: \n{}".format(str(SolverStatistics())))

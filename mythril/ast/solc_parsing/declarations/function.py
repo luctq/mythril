@@ -5,6 +5,7 @@ from mythril.ast.core.declarations.function import Function, FunctionType
 from mythril.ast.core.declarations.function_contract import FunctionContract
 from mythril.ast.core.variables.local_variable import LocalVariable
 from mythril.ast.solc_parsing.variables.local_variable import LocalVariableSolc
+from mythril.ast.solc_parsing.variables.variable_declaration import MultipleVariablesDeclaration
 from mythril.ast.core.source_mapping.source_mapping import Source
 from mythril.ast.core.cfg.node import NodeType, Node, link_nodes
 from mythril.ast.core.cfg.scope import Scope
@@ -197,9 +198,11 @@ class FunctionSolc(CallerContextExpression):
         if "payable" in attributes:
             self._function.payable = attributes["payable"]
     def _new_node(
-        self, node_type: NodeType, src: Union[str, Source], scope: Union[Scope, "Function"]
+        self, node_type: NodeType, src: Union[str, Source], scope: Union[Scope, "Function"],
+        is_local_variable_declaration = False
     ) -> NodeSolc:
         node = self._function.new_node(node_type, src, scope)
+        node.is_local_variable_declaration = is_local_variable_declaration
         node_parser = NodeSolc(node)
         self._node_to_nodesolc[node] = node_parser
         return node_parser
@@ -342,7 +345,7 @@ class FunctionSolc(CallerContextExpression):
         elif name == "EmitStatement":
             pass
         elif name in ["VariableDefinitionStatement", "VariableDeclarationStatement"]:
-            pass
+            node = self._parse_variable_definition(statement, node)
         elif name == "ExpressionStatement":
             # assert len(statement[self.get_children('expression')]) == 1
             # assert not 'attributes' in statement
@@ -395,3 +398,23 @@ class FunctionSolc(CallerContextExpression):
             assert ret[self.get_key()] == "VariableDeclaration"
             local_var = self._add_param(ret)
             self._function.add_return(local_var.underlying_variable)
+    
+    def _parse_variable_definition(self, statement: Dict, node: NodeSolc) -> NodeSolc:
+        try:
+            local_var = LocalVariable()
+            local_var.set_function(self._function)
+            local_var.set_offset(statement["src"], self._function.compilation_unit)
+
+            local_var_parser = LocalVariableSolc(local_var, statement)
+            self._add_local_variable(local_var_parser)
+            # local_var.analyze(self)
+
+            new_node = self._new_node(
+                NodeType.VARIABLE, statement["src"], node.underlying_node.scope,
+                is_local_variable_declaration=True
+            )
+            new_node.underlying_node.add_variable_declaration(local_var)
+            link_underlying_nodes(node, new_node)
+            return new_node
+        except MultipleVariablesDeclaration:
+           pass

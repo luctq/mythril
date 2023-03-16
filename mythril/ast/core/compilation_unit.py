@@ -22,11 +22,19 @@ class StaticCompilationUnit(Context):
         self.scopes: Dict[Filename, FileScope] = {}
 
         self._all_functions: Set[Function] = set()
+
+        self.counter_astir_temporary = 0
     
     @property
     def source_units(self) -> Dict[int, str]:
         return self._source_units
 
+    @property
+    def contracts_derived(self) -> List[Contract]:
+        """list(Contract): List of contracts that are derived and not inherited."""
+        inheritances = [x.inheritance for x in self.contracts]
+        inheritance = [item for sublist in inheritances for item in sublist]
+        return [c for c in self.contracts if c not in inheritance and not c.is_top_level]
 
     @property
     def solc_version(self) -> str:

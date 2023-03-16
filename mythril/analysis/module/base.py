@@ -27,7 +27,9 @@ class EntryPoint(Enum):
     POST = 1
     CALLBACK = 2
 
-
+class ModuleType(Enum):
+    STATIC = 1
+    SYMBOLIC = 2
 class DetectionModule(ABC):
     """The base detection module.
 
@@ -51,10 +53,11 @@ class DetectionModule(ABC):
     pre_hooks: List[str] = []
     post_hooks: List[str] = []
 
-    def __init__(self) -> None:
+    def __init__(self, module_type = ModuleType.SYMBOLIC) -> None:
         self.issues: List[Issue] = []
         self.cache: Set[Tuple[int, str]] = set()
         self.auto_cache = True
+        self.type = module_type
 
     def reset_module(self):
         """Resets the storage of this module"""
@@ -97,6 +100,17 @@ class DetectionModule(ABC):
 
         return result
 
+    def execute_static(self):
+        result = self._execute()
+        log.debug("Exiting analysis module: {}".format(self.__class__.__name__))
+
+        if result and not args.use_issue_annotations:
+            self.issues += result
+
+        return result
+
+
+
     @abstractmethod
     def _execute(self, target) -> Optional[List[Issue]]:
         """Module main method (override this)
@@ -117,3 +131,5 @@ class DetectionModule(ABC):
             "description={0.description}"
             ">"
         ).format(self)
+
+

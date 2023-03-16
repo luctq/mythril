@@ -20,3 +20,8 @@ class LocalVariable(ChildFunction, Variable):
             (str)
         """
         return self._location
+    
+    @property
+    def canonical_name(self) -> str:
+        return f"{self.function.name}.{self.name}"
+    
