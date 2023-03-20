@@ -219,8 +219,20 @@ class ContractSolc(CallerContextExpression):
     
     def parse_state_variables(self):
         for father in self._contract.inheritance_reverse:
-            pass
-
+            self._contract.variables_as_dict.update(
+                {
+                    name: v
+                    for name, v in father.variables_as_dict.items()
+                    if v.visibility != "private"
+                }
+            )
+            self._contract.add_variables_ordered(
+                [
+                    var
+                    for var in father.state_variables_ordered
+                    if var not in self._contract.state_variables_ordered
+                ]
+            )
         for varNotParsed in self._variablesNotParsed:
             var = StateVariable()
             var.set_offset(varNotParsed["src"], self._contract.compilation_unit)
@@ -319,8 +331,9 @@ class ContractSolc(CallerContextExpression):
             self.log_incorrect_parsing(f"Missing params {e}")
         return all_elements
     
-    # def log_incorrect_parsing(self, error: str) -> None:
-    #     if self._contract.compilation_unit.core.disallow_partial:
-    #         raise ParsingError(error)
-    #     self._contract.is_incorrectly_constructed = True
+    def log_incorrect_parsing(self, error: str) -> None:
+        pass
+        # if self._contract.compilation_unit.core.disallow_partial:
+        #     raise ParsingError(error)
+        # self._contract.is_incorrectly_constructed = True
    

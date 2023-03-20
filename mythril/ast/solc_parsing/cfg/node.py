@@ -30,6 +30,7 @@ class NodeSolc:
         if self._node.expression:
             if self._node.type == NodeType.VARIABLE:
                 # Update the expression to be an assignement to the variable
+                print("self._node.expression", self._node.expression)
                 _expression = AssignmentOperation(
                     Identifier(self._node.variable_declaration),
                     self._node.expression,

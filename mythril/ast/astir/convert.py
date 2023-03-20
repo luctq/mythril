@@ -7,7 +7,7 @@ from mythril.ast.astir.operations.lvalue import OperationWithLValue
 from mythril.ast.astir.operations.return_operation import Return
 
 def convert_expression(expression, node):
-    # handle standlone expression
+    # handle standlone expresUsion
     # such as return true;
     from mythril.ast.core.cfg.node import NodeType
 

@@ -14,9 +14,12 @@ class Contract(SourceMapping):
         super().__init__()
         self._name: Optional[str] = None
         self._id: Optional[int] = None
-        self._inheritance: List["Contract"] = []  
+        self._inheritance: List["Contract"] = []  # all contract inherited, c3 linearization
+        self._immediate_inheritance: List["Contract"] = []  # immediate inheritance  
 
-        # self._explicit_base_constructor_calls: List["Contract"] = []
+        # Constructors called on contract's definition
+        # contract B is A(1) { ..
+        self._explicit_base_constructor_calls: List["Contract"] = []
         # self._enums: Dict[str, "EnumContract"] = {}
         # self._structures: Dict[str, "StructureContract"] = {}
         # self._events: Dict[str, "Event"] = {}
@@ -54,6 +57,41 @@ class Contract(SourceMapping):
     def id(self, new_id):
         """Unique id."""
         self._id = new_id
+
+    @property
+    def constructor(self) -> Optional["Function"]:
+        """
+        Return the contract's immediate constructor.
+        If there is no immediate constructor, returns the first constructor
+        executed, following the c3 linearization
+        Return None if there is no constructor.
+        """
+        cst = self.constructors_declared
+        if cst:
+            return cst
+        for inherited_contract in self.inheritance:
+            cst = inherited_contract.constructors_declared
+            if cst:
+                return cst
+        return None
+
+    @property
+    def constructors_declared(self) -> Optional["Function"]:
+        return next(
+            (
+                func
+                for func in self.functions
+                if func.is_constructor and func.contract_declarer == self
+            ),
+            None,
+        )
+
+    @property
+    def constructors(self) -> List["Function"]:
+        """
+        Return the list of constructors (including inherited)
+        """
+        return [func for func in self.functions if func.is_constructor]
 
     @property
     def inheritance(self) -> List["Contract"]:
@@ -189,6 +227,16 @@ class Contract(SourceMapping):
             if f.visibility in ["public", "external"] and not f.is_shadowed or f.is_fallback
         ]
 
+    def set_inheritance(
+        self,
+        inheritance: List["Contract"],
+        immediate_inheritance: List["Contract"],
+        called_base_constructor_contracts: List["Contract"],
+    ):
+        self._inheritance = inheritance
+        self._immediate_inheritance = immediate_inheritance
+        self._explicit_base_constructor_calls = called_base_constructor_contracts
+
     def is_from_dependency(self) -> bool:
         return self.compilation_unit.core.crytic_compile.is_dependency(
             self.source_mapping.filename.absolute
@@ -200,7 +248,14 @@ class Contract(SourceMapping):
             bool: true if the function are abstract functions
         """
         return all((not f.is_implemented) for f in self.functions)
-
+    
+    @property
+    def state_variables_ordered(self) -> List["StateVariable"]:
+        """
+        list(StateVariable): List of the state variables by order of declaration.
+        """
+        return list(self._variables_ordered)
+    
     def add_variables_ordered(self, new_vars: List["StateVariable"]):
         self._variables_ordered += new_vars
 

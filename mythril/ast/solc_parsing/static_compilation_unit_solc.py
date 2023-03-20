@@ -168,6 +168,7 @@ class StaticCompilationUnitSolc(CallerContextExpression):
             lib_name = os.path.join("node_modules", name)
             if os.path.isfile(lib_name) and not name in self._compilation_unit.core.source_code:
                 self._compilation_unit.core.add_source_code(lib_name)
+    
     def parse_contracts(self):
         if not self._underlying_contract_to_parser:
             print(f"No contract were found in {self._compilation_unit.core.filename}, check the correct compilation")
@@ -179,6 +180,35 @@ class StaticCompilationUnitSolc(CallerContextExpression):
             self._contracts_by_id[contract.id] = contract
             self._compilation_unit.contracts.append(contract)
         
+        for contract_parser in self._underlying_contract_to_parser.values():
+            
+            ancestors = []
+            fathers = []
+            father_constructors = []
+
+            for i in contract_parser.linearized_base_contracts[1:]:
+                if i in self._contracts_by_id:
+                    ancestors.append(self._contracts_by_id[i])
+                else:
+                    contract_parser.log_incorrect_parsing("error")
+            
+            for i in contract_parser.baseContracts:
+                if i in self._contracts_by_id:
+                    fathers.append(self._contracts_by_id[i])
+                else:
+                    contract_parser.log_incorrect_parsing("error")
+            
+            for i in contract_parser.baseConstructorContractsCalled:
+                
+                if i in self._contracts_by_id:
+                    father_constructors.append(self._contracts_by_id[i])
+                else:
+                    contract_parser.log_incorrect_parsing("error")
+
+            contract_parser.underlying_contract.set_inheritance(
+                ancestors, fathers, father_constructors
+            )
+        
         [c.set_is_analyzed(False) for c in self._underlying_contract_to_parser.values()]
         
         contracts_to_be_analyzed = list(self._underlying_contract_to_parser.values())
@@ -188,19 +218,57 @@ class StaticCompilationUnitSolc(CallerContextExpression):
         contracts_to_be_analyzed = [
             c for c in contracts_to_be_analyzed if c.underlying_contract.contract_kind != "library"
         ]
-        # We first parse the struct/variables/functions/contract
-        self._parse_first_part(contracts_to_be_analyzed, libraries)
-        [c.set_is_analyzed(False) for c in self._underlying_contract_to_parser.values()]
-        # We analyze the struct and parse and analyze the events
-        # A contract can refer in the variables a struct or a event from any contract
-        # (without inheritance link)
-        self._parse_second_part(contracts_to_be_analyzed, libraries)
-        [c.set_is_analyzed(False) for c in self._underlying_contract_to_parser.values()]
-        # Then we analyse state variables, functions and modifiers
-        self._parse_third_part(contracts_to_be_analyzed, libraries)
-        [c.set_is_analyzed(False) for c in self._underlying_contract_to_parser.values()]
+        for lib in libraries:
+            self._parse_struct_var_modifiers_functions(lib)
+            self._analyze_variables_modifiers_functions(lib)
+
+        while contracts_to_be_analyzed:
+            contract = contracts_to_be_analyzed[0]
+            contracts_to_be_analyzed = contracts_to_be_analyzed[1:]
+            all_father_analyzed = all(
+                self._underlying_contract_to_parser[father].is_analyzed
+                for father in contract.underlying_contract.inheritance
+            )
+            if not contract.underlying_contract.inheritance or all_father_analyzed:
+                self._parse_struct_var_modifiers_functions(contract)
+                self._analyze_variables_modifiers_functions(contract)
+            else:
+                contracts_to_be_analyzed += [contract]
+        # # We first parse the struct/variables/functions/contract
+        # self._parse_first_part(contracts_to_be_analyzed, libraries)
+        # [c.set_is_analyzed(False) for c in self._underlying_contract_to_parser.values()]
+        # # We analyze the struct and parse and analyze the events
+        # # A contract can refer in the variables a struct or a event from any contract
+        # # (without inheritance link)
+        # self._parse_second_part(contracts_to_be_analyzed, libraries)
+        # [c.set_is_analyzed(False) for c in self._underlying_contract_to_parser.values()]
+        # # Then we analyse state variables, functions and modifiers
+        # self._parse_third_part(contracts_to_be_analyzed, libraries)
+        # [c.set_is_analyzed(False) for c in self._underlying_contract_to_parser.values()]
         self._parsed = True
-    
+    def _parse_execute(
+        self, 
+        contracts_to_be_analyzed: List[ContractSolc], 
+        libraries: List[ContractSolc]
+    ):
+        """
+        This functions will parse the struct/variables/functions/contract
+        """
+        for lib in libraries:
+            self._parse_struct_var_modifiers_functions(lib)
+            self._analyze_variables_modifiers_functions(lib)
+        while contracts_to_be_analyzed:
+            contract = contracts_to_be_analyzed[0]
+            contracts_to_be_analyzed = contracts_to_be_analyzed[1:]
+            all_father_analyzed = all(
+                self._underlying_contract_to_parser[father].is_analyzed
+                for father in contract.underlying_contract.inheritance
+            )
+            if not contract.underlying_contract.inheritance or all_father_analyzed:
+                self._parse_struct_var_modifiers_functions(contract)
+                self._analyze_variables_modifiers_functions(contract)
+            else:
+                contracts_to_be_analyzed += [contract]
     def _parse_first_part(
         self, 
         contracts_to_be_analyzed: List[ContractSolc], 
