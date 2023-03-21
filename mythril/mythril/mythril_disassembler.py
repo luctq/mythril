@@ -6,6 +6,7 @@ import os
 
 from semantic_version import Version, NpmSpec
 from typing import List, Tuple, Optional
+from crytic_compile import CryticCompile
 
 from mythril.support.support_utils import sha3, zpad
 from mythril.ethereum import util
@@ -47,7 +48,7 @@ class MythrilDisassembler:
         self.enable_online_lookup = enable_online_lookup
         self.sigs = signatures.SignatureDB(enable_online_lookup=enable_online_lookup)
         self.contracts = []  # type: List[EVMContract]
-
+        self.static_compiles = []
     @staticmethod
     def _init_solc_binary(version: str) -> Optional[str]:
         """
@@ -169,6 +170,7 @@ class MythrilDisassembler:
                 contract_name = None
 
             file = os.path.expanduser(file)
+            self.static_compiles.append(CryticCompile(file))
             solc_binary = self.solc_binary or util.extract_binary(file)
             try:
                 # import signatures from solidity source

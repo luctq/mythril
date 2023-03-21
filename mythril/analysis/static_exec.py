@@ -30,8 +30,8 @@ class StaticExec(StaticExecCore):
             parser = StaticCompilationUnitSolc(compilation_unit_static)
             self._parsers.append(parser)
             for path, ast in compilation_unit.asts.items():
-                parser.parse_top_level_from_loaded_json(ast, path) # dong nay quan trong
-                self.add_source_code(path)
+                parser.parse_top_level_from_loaded_json(ast, path)
+                # self.add_source_code(path)
             # _update_file_scopes(compilation_unit_static.scopes.values())
         self._init_parsing_and_analyses()
         for module in ModuleLoader().get_detection_modules(EntryPoint.CALLBACK, modules):

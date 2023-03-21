@@ -279,6 +279,12 @@ class Report:
                 )
             )
             issue.resolve_function_names()
+        else:
+            m.update(
+                (issue.contract + issue.lineno + issue.code).encode(
+                    "utf-8"
+                )
+            )
         self.issues[m.digest()] = issue
 
     def as_text(self):

@@ -218,32 +218,16 @@ class StaticCompilationUnitSolc(CallerContextExpression):
         contracts_to_be_analyzed = [
             c for c in contracts_to_be_analyzed if c.underlying_contract.contract_kind != "library"
         ]
-        for lib in libraries:
-            self._parse_struct_var_modifiers_functions(lib)
-            self._analyze_variables_modifiers_functions(lib)
-
-        while contracts_to_be_analyzed:
-            contract = contracts_to_be_analyzed[0]
-            contracts_to_be_analyzed = contracts_to_be_analyzed[1:]
-            all_father_analyzed = all(
-                self._underlying_contract_to_parser[father].is_analyzed
-                for father in contract.underlying_contract.inheritance
-            )
-            if not contract.underlying_contract.inheritance or all_father_analyzed:
-                self._parse_struct_var_modifiers_functions(contract)
-                self._analyze_variables_modifiers_functions(contract)
-            else:
-                contracts_to_be_analyzed += [contract]
         # # We first parse the struct/variables/functions/contract
-        # self._parse_first_part(contracts_to_be_analyzed, libraries)
+        self._parse_first_part(contracts_to_be_analyzed, libraries)
         # [c.set_is_analyzed(False) for c in self._underlying_contract_to_parser.values()]
         # # We analyze the struct and parse and analyze the events
         # # A contract can refer in the variables a struct or a event from any contract
         # # (without inheritance link)
-        # self._parse_second_part(contracts_to_be_analyzed, libraries)
+        self._parse_second_part(contracts_to_be_analyzed, libraries)
         # [c.set_is_analyzed(False) for c in self._underlying_contract_to_parser.values()]
         # # Then we analyse state variables, functions and modifiers
-        # self._parse_third_part(contracts_to_be_analyzed, libraries)
+        self._parse_third_part(contracts_to_be_analyzed, libraries)
         # [c.set_is_analyzed(False) for c in self._underlying_contract_to_parser.values()]
         self._parsed = True
     def _parse_execute(

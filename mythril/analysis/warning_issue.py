@@ -4,16 +4,22 @@ class WarningIssues:
         contract: str,
         swc_id: str,
         title: str,
+        function: str = None,
         severity = None,
         filename: str = None,
-        descriptions = ""
+        description = "",
+        code: str = None,
+        lineno: str = None,
     ):
         self.contract = contract
+        self.function = function
         self.swc_id = swc_id
         self.title = title
         self.severity = severity
         self.filename = filename
-        self.descriptions = descriptions
+        self.description = description
+        self.code = code
+        self.lineno = lineno
     
     @property
     def as_dict(self):
@@ -26,9 +32,13 @@ class WarningIssues:
             "title": self.title,
             "swc-id": self.swc_id,
             "contract": self.contract,
+            "function": self.function,
             "title": self.title,
             "severity": self.severity,
-            "descriptions": self.descriptions,
+            "description": self.description,
+            "filename": self.filename,
+            "lineno": self.lineno,
+            "code": self.code
         }
 
         return issue

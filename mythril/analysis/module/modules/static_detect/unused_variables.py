@@ -44,52 +44,35 @@ class UnusedVariables(DetectionModule):
     def _execute(self) -> List[Issue]:
         """Execute detect unused state variables"""
         issues = []
-        descriptions = ""
-        is_issue_detected = False
         for c in self.compilation_unit.contracts_derived:
             unusedStateVars = detect_unused_state_variables(c)
             if unusedStateVars:
-                is_issue_detected = True
                 for var in unusedStateVars:
-                    info = ["\n", var, " is never used in ", c, "\n"]
-                    descriptions += "".join(self._convert_to_description(d)for d in info)
-            
+                    issue = WarningIssues(
+                        contract=var.contract.name,
+                        swc_id=PRESENCE_OF_UNUSED_VARIABLES,
+                        title="Unused State Variables",
+                        severity="Low",
+                        filename=var.source_mapping.filename.short,
+                        description="Variable is never use in contract",
+                        code=var.source_mapping.code.strip(),
+                        lineno=var.source_mapping.get_lines_str(),
+                    )
+                    issues.append(issue)
             for func in c.all_functions_called + c.modifiers:
                 unusedLocalVars = detect_unused_local_variables(func)
                 if unusedLocalVars:
-                    is_issue_detected = True
                     for var in unusedLocalVars:
-                        info = ["\n", var, " is never used in ", func, "\n"]
-                        descriptions += "".join(self._convert_to_description(d)for d in info)
-            if is_issue_detected:
-                issue = WarningIssues(
-                    contract=c.name,
-                    swc_id=PRESENCE_OF_UNUSED_VARIABLES,
-                    title="Unused Variables",
-                    severity="Low",
-                    filename=self.compilation_unit.core.filename,
-                    descriptions=descriptions,
-                )
-                issues.append(issue)
+                        issue = WarningIssues(
+                        contract=var.function.contract.name,
+                        function=var.function.name,
+                        swc_id=PRESENCE_OF_UNUSED_VARIABLES,
+                        title="Unused Local Variables",
+                        severity="Low",
+                        filename=var.source_mapping.filename.short,
+                        description="Variable is never use in contract",
+                        code=var.source_mapping.code.strip(),
+                        lineno=var.source_mapping.get_lines_str(),
+                    )
+                    issues.append(issue)
         return issues
-
-    @staticmethod
-    def _convert_to_description(d):
-        if isinstance(d, str):
-            return d
-
-        if not isinstance(d, SourceMapping):
-            raise StaticError(f"{d} does not inherit from SourceMapping, conversion impossible")
-
-        if isinstance(d, Node):
-            if d.expression:
-                return f"{d.expression} ({d.source_mapping})"
-            return f"{str(d)} ({d.source_mapping})"
-
-        if hasattr(d, "canonical_name"):
-            return f"{d.canonical_name} ({d.source_mapping})"
-
-        if hasattr(d, "name"):
-            return f"{d.name} ({d.source_mapping})"
-
-        raise StaticError(f"{type(d)} cannot be converted (no name, or canonical_name")

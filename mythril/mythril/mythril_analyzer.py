@@ -48,6 +48,7 @@ class MythrilAnalyzer:
         """
         self.eth = disassembler.eth
         self.contracts = disassembler.contracts or []  # type: List[EVMContract]
+        self.static_compiles = disassembler.static_compiles or []
         self.enable_online_lookup = disassembler.enable_online_lookup
         self.use_onchain_data = not cmd_args.no_onchain_data
         self.strategy = strategy
@@ -137,10 +138,14 @@ class MythrilAnalyzer:
         SolverStatistics().enabled = True
         exceptions = []
         execution_info = None  # type: Optional[List[ExecutionInfo]]
+
+        for static_compile in self.static_compiles:
+            static = StaticExec(static_compile, modules=modules)
+
         for contract in self.contracts:
             StartTime()  # Reinitialize start time for new contracts
             try:
-                static = StaticExec(contract.input_file,modules=modules)
+                # static = StaticExec(contract.input_file, modules=modules)
 
                 sym = SymExecWrapper(
                     contract,
@@ -176,7 +181,6 @@ class MythrilAnalyzer:
             for issue in issues:
                 if not isinstance(issue, WarningIssues):
                     issue.add_code_info(contract)
-
             all_issues += issues
             log.info("Solver statistics: \n{}".format(str(SolverStatistics())))
 
@@ -191,5 +195,5 @@ class MythrilAnalyzer:
         )
         for issue in all_issues:
             report.append_issue(issue)
-
+            
         return report

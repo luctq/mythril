@@ -1,4 +1,5 @@
 import re
+import linecache
 from abc import ABCMeta
 from typing import Dict, Union, List, Tuple, TYPE_CHECKING, Optional
 
@@ -15,12 +16,13 @@ class Source:
         self.filename: Filename = Filename("", "", "", "")
         self.is_dependency: bool = False
         self.lines: List[int] = []
+        self.code: str = ""
         self.starting_column: int = 0
         self.ending_column: int = 0
         self.end: int = 0
         self.compilation_unit: Optional["StaticCompilationUnit"] = None
 
-    def _get_lines_str(self, line_descr=""):
+    def get_lines_str(self, line_descr=""):
 
         # If the compilation unit was not initialized, it means that the set_offset was never called
         # on the corresponding object, which should not happen
@@ -38,10 +40,11 @@ class Source:
         return lines
     
     def __str__(self) -> str:
-        lines = self._get_lines_str()
+        lines = self.get_lines_str()
         filename_short: str = self.filename.short if self.filename.short else ""
         return f"{filename_short}{lines}"
 
+    
 def _compute_line(
     compilation_unit: "StaticCompilationUnit", filename: Filename, start: int, length: int
 ) -> Tuple[List[int], int, int]:
@@ -102,6 +105,8 @@ def _convert_source_mapping(
     new_source.starting_column = starting_column
     new_source.ending_column = ending_column
     new_source.end = new_source.start + l
+    for i in range(lines[0], lines[-1] + 1):
+        new_source.code += linecache.getline(filename.short, i)
     return new_source
 class SourceMapping(Context, metaclass=ABCMeta):
     def __init__(self) -> None:
@@ -122,6 +127,8 @@ class SourceMapping(Context, metaclass=ABCMeta):
             self.source_mapping.starting_column = offset.starting_column
             self.source_mapping.ending_column = offset.ending_column
             self.source_mapping.end = offset.end
+            for i in range(offset.lines[0], offset.lines[-1] + 1):
+                self.source_mapping.code += linecache.getline(offset.filename.short, i)
         else:
             # print("debug")
             self.source_mapping = _convert_source_mapping(offset, compilation_unit)
