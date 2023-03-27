@@ -302,6 +302,40 @@ class FunctionSolc(CallerContextExpression):
         for statement in statements:
             node = self._parse_statement(statement, node, new_scope)
         return node 
+    def _parse_if(self, if_statement: Dict, node: NodeSolc) -> NodeSolc:
+        falseStatement = None
+        
+        condition = if_statement["condition"]
+        # Note: check if the expression could be directly
+        # parsed here
+        condition_node = self._new_node(
+            NodeType.IF, condition["src"], node.underlying_node.scope
+        )
+        condition_node.add_unparsed_expression(condition)
+        link_underlying_nodes(node, condition_node)
+        true_scope = Scope(
+            node.underlying_node.scope.is_checked, False, node.underlying_node.scope
+        )
+        trueStatement = self._parse_statement(
+            if_statement["trueBody"], condition_node, true_scope
+        )
+        if "falseBody" in if_statement and if_statement["falseBody"]:
+            false_scope = Scope(
+                node.underlying_node.scope.is_checked, False, node.underlying_node.scope
+            )
+            falseStatement = self._parse_statement(
+                if_statement["falseBody"], condition_node, false_scope
+            )
+
+        endIf_node = self._new_node(NodeType.ENDIF, if_statement["src"], node.underlying_node.scope)
+        link_underlying_nodes(trueStatement, endIf_node)
+
+        if falseStatement:
+            link_underlying_nodes(falseStatement, endIf_node)
+        else:
+            link_underlying_nodes(condition_node, endIf_node)
+        return endIf_node
+
     def _parse_statement(
         self, statement: Dict, node: NodeSolc, scope: Union[Scope, Function]
     ) -> NodeSolc:
@@ -318,13 +352,13 @@ class FunctionSolc(CallerContextExpression):
         name = statement[self.get_key()]
         # SimpleStatement = VariableDefinition | ExpressionStatement
         if name == "IfStatement":
-            pass
+            node = self._parse_if(statement, node)
         elif name == "WhileStatement":
             pass
         elif name == "ForStatement":
             pass
         elif name == "Block":
-            pass
+            node = self._parse_block(statement, node)
         elif name == "UncheckedBlock":
             pass
         elif name == "InlineAssembly":
@@ -335,15 +369,30 @@ class FunctionSolc(CallerContextExpression):
         # For Continue / Break / Return / Throw
         # The is fixed later
         elif name == "Continue":
-           pass
+            continue_node = self._new_node(NodeType.CONTINUE, statement["src"], scope)
+            link_underlying_nodes(node, continue_node)
+            node = continue_node
         elif name == "Break":
-            pass
+            break_node = self._new_node(NodeType.BREAK, statement["src"], scope)
+            link_underlying_nodes(node, break_node)
+            node = break_node
         elif name == "Return":
-            pass
+            return_node = self._new_node(NodeType.RETURN, statement["src"], scope)
+            link_underlying_nodes(node, return_node)
+            if statement.get("expression", None):
+                return_node.add_unparsed_expression(statement["expression"])
+            node = return_node
         elif name == "Throw":
-            pass
+            throw_node = self._new_node(NodeType.THROW, statement["src"], scope)
+            link_underlying_nodes(node, throw_node)
+            node = throw_node
         elif name == "EmitStatement":
-            pass
+            expression = statement["eventCall"]
+
+            new_node = self._new_node(NodeType.EXPRESSION, statement["src"], scope)
+            new_node.add_unparsed_expression(expression)
+            link_underlying_nodes(node, new_node)
+            node = new_node
         elif name in ["VariableDefinitionStatement", "VariableDeclarationStatement"]:
             node = self._parse_variable_definition(statement, node)
         elif name == "ExpressionStatement":
@@ -363,13 +412,17 @@ class FunctionSolc(CallerContextExpression):
         # elif name == 'TryCatchClause':
         #     self._parse_catch(statement, node)
         elif name == "RevertStatement":
-            pass
+            expression = statement[self.get_children("errorCall")]
+            new_node = self._new_node(NodeType.EXPRESSION, statement["src"], scope)
+            new_node.add_unparsed_expression(expression)
+            link_underlying_nodes(node, new_node)
+            node = new_node
         else:
             raise ParsingError(f"Statement not parsed {name}")
 
         return node
 
-
+    
     def _parse_params(self, params: Dict):
         assert params[self.get_key()] == "ParameterList"
 

@@ -56,7 +56,6 @@ class MythrilDisassembler:
         :param version: Version of the solc binary required
         :return: The solc binary of the corresponding version
         """
-
         if not version:
             return None
 
@@ -170,8 +169,8 @@ class MythrilDisassembler:
                 contract_name = None
 
             file = os.path.expanduser(file)
-            self.static_compiles.append(CryticCompile(file))
             solc_binary = self.solc_binary or util.extract_binary(file)
+            self.static_compiles.append(CryticCompile(file))
             try:
                 # import signatures from solidity source
                 self.sigs.import_solidity_file(

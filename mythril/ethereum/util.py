@@ -219,11 +219,17 @@ def extract_version(file: str):
 
 
 def extract_binary(file: str) -> str:
+    from solc_select import solc_select
     with open(file) as f:
         version = extract_version(f.read())
+
     if version and NpmSpec("^0.8.0").match(Version(version)):
         args.use_integer_module = False
-
+    solc_current_version, _ = solc_select.current_version()
+    if version not in solc_select.installed_versions():
+        solc_select.switch_global_version(version, True)
+    elif version != solc_current_version:
+        solc_select.switch_global_version(version, False)
     if version is None:
         return os.environ.get("SOLC") or "solc"
     return solc_exists(version)

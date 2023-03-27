@@ -102,6 +102,9 @@ class Node(SourceMapping, ChildFunction):
         self._expression_vars_read: List[Expression] = []
         self._expression_calls: List[Expression] = []
 
+        self._local_vars_read: List[LocalVariable] = []
+        self._local_vars_written: List[LocalVariable] = []
+
         self._astir_vars: Set["AstIRVariable"] = set()  
 
         self._expression: Optional[Expression] = None

@@ -27,8 +27,13 @@ def detect_unused_state_variables(contract):
 
 def detect_unused_local_variables(function):
     local_variables_used =  function.variables_read + function.variables_written
-    all_local_variables = function.local_variables + function.parameters
-    return [x for x in all_local_variables if x not in local_variables_used]
+    local_variables = function.local_variables
+    return [x for x in local_variables if x not in local_variables_used]
+
+def detect_unused_parameter_variables(function):
+    local_variables_used =  function.variables_read + function.variables_written
+    parameter_variables = function.parameters 
+    return [x for x in parameter_variables if x not in local_variables_used]
 
 class UnusedVariables(DetectionModule):
     name = "Unused variable"
@@ -52,15 +57,16 @@ class UnusedVariables(DetectionModule):
                         contract=var.contract.name,
                         swc_id=PRESENCE_OF_UNUSED_VARIABLES,
                         title="Unused State Variables",
-                        severity="Low",
+                        severity="LoMedium",
                         filename=var.source_mapping.filename.short,
-                        description="Variable is never use in contract",
+                        description=f"State variable '{var.name}'  is never use in contract {c.name}.\nRemove all unused variables from the code base.",
                         code=var.source_mapping.code.strip(),
                         lineno=var.source_mapping.get_lines_str(),
                     )
                     issues.append(issue)
             for func in c.all_functions_called + c.modifiers:
                 unusedLocalVars = detect_unused_local_variables(func)
+                unusedParameterVars = detect_unused_parameter_variables(func)
                 if unusedLocalVars:
                     for var in unusedLocalVars:
                         issue = WarningIssues(
@@ -68,9 +74,23 @@ class UnusedVariables(DetectionModule):
                         function=var.function.name,
                         swc_id=PRESENCE_OF_UNUSED_VARIABLES,
                         title="Unused Local Variables",
-                        severity="Low",
+                        severity="Medium",
                         filename=var.source_mapping.filename.short,
-                        description="Variable is never use in contract",
+                        description=f"Local variable '{var.name}' is never use in function '{func.name}'",
+                        code=var.source_mapping.code.strip(),
+                        lineno=var.source_mapping.get_lines_str(),
+                    )
+                    issues.append(issue)
+                if unusedParameterVars:
+                    for var in unusedParameterVars:
+                        issue = WarningIssues(
+                        contract=var.function.contract.name,
+                        function=var.function.name,
+                        swc_id=PRESENCE_OF_UNUSED_VARIABLES,
+                        title="Unused Parameter Variables",
+                        severity="Medium",
+                        filename=var.source_mapping.filename.short,
+                        description=f"Parameter variable '{var.name}' is never use in function '{func.name}'",
                         code=var.source_mapping.code.strip(),
                         lineno=var.source_mapping.get_lines_str(),
                     )

@@ -10,10 +10,13 @@ from mythril.ast.core.expressions.binary_operation import BinaryOperation, Binar
 from mythril.ast.core.expressions.conditional_expression import ConditionalExpression
 from mythril.ast.core.expressions.assignment_operation import AssignmentOperation, AssignmentOperationType
 from mythril.ast.core.expressions.identifier import Identifier
+from mythril.ast.core.expressions.elementary_type_name_expression import ElementaryTypeNameExpression
+from mythril.ast.core.expressions.index_acess import IndexAccess
+from mythril.ast.core.solidity_types.array_type import ArrayType
 from mythril.ast.core.solidity_types.elementary_type import ElementaryType
 from mythril.ast.core.expressions.literal import Literal
 from mythril.ast.solc_parsing.expressions.find_variable import find_variable
-
+from mythril.ast.solc_parsing.solidity_types.type_parsing import UnknownType, parse_type
 def filter_name(value: str) -> str:
     value = value.replace(" memory", "")
     value = value.replace(" storage", "")
@@ -83,36 +86,23 @@ def parse_expression(expression: Dict, caller_context: CallerContextExpression) 
     src = expression["src"]
 
     if name == "UnaryOperation":
-        if is_compact_ast:
-            attributes = expression
-        else:
-            attributes = expression["attributes"]
-        assert "prefix" in attributes
-        operation_type = UnaryOperationType.get_type(attributes["operator"], attributes["prefix"])
+        attributes = expression
 
-        if is_compact_ast:
-            expression = parse_expression(expression["subExpression"], caller_context)
-        else:
-            assert len(expression["children"]) == 1
-            expression = parse_expression(expression["children"][0], caller_context)
+        assert "prefix" in attributes
+
+        operation_type = UnaryOperationType.get_type(attributes["operator"], attributes["prefix"])
+        expression = parse_expression(expression["subExpression"], caller_context)
         unary_op = UnaryOperation(expression, operation_type)
         unary_op.set_offset(src, caller_context.compilation_unit)
         return unary_op
 
     if name == "BinaryOperation":
-        if is_compact_ast:
-            attributes = expression
-        else:
-            attributes = expression["attributes"]
+        attributes = expression
         operation_type = BinaryOperationType.get_type(attributes["operator"])
 
-        if is_compact_ast:
-            left_expression = parse_expression(expression["leftExpression"], caller_context)
-            right_expression = parse_expression(expression["rightExpression"], caller_context)
-        else:
-            assert len(expression["children"]) == 2
-            left_expression = parse_expression(expression["children"][0], caller_context)
-            right_expression = parse_expression(expression["children"][1], caller_context)
+        left_expression = parse_expression(expression["leftExpression"], caller_context)
+        right_expression = parse_expression(expression["rightExpression"], caller_context)
+
         binary_op = BinaryOperation(left_expression, right_expression, operation_type)
         binary_op.set_offset(src, caller_context.compilation_unit)
         return binary_op
@@ -127,37 +117,21 @@ def parse_expression(expression: Dict, caller_context: CallerContextExpression) 
         pass
 
     if name == "Conditional":
-        if is_compact_ast:
-            if_expression = parse_expression(expression["condition"], caller_context)
-            then_expression = parse_expression(expression["trueExpression"], caller_context)
-            else_expression = parse_expression(expression["falseExpression"], caller_context)
-        else:
-            children = expression["children"]
-            assert len(children) == 3
-            if_expression = parse_expression(children[0], caller_context)
-            then_expression = parse_expression(children[1], caller_context)
-            else_expression = parse_expression(children[2], caller_context)
+        if_expression = parse_expression(expression["condition"], caller_context)
+        then_expression = parse_expression(expression["trueExpression"], caller_context)
+        else_expression = parse_expression(expression["falseExpression"], caller_context)
+    
         conditional = ConditionalExpression(if_expression, then_expression, else_expression)
         conditional.set_offset(src, caller_context.compilation_unit)
         return conditional
 
     if name == "Assignment":
-        if is_compact_ast:
-            left_expression = parse_expression(expression["leftHandSide"], caller_context)
-            right_expression = parse_expression(expression["rightHandSide"], caller_context)
+        left_expression = parse_expression(expression["leftHandSide"], caller_context)
+        right_expression = parse_expression(expression["rightHandSide"], caller_context)
 
-            operation_type = AssignmentOperationType.get_type(expression["operator"])
+        operation_type = AssignmentOperationType.get_type(expression["operator"])
 
-            operation_return_type = expression["typeDescriptions"]["typeString"]
-        else:
-            attributes = expression["attributes"]
-            children = expression["children"]
-            assert len(expression["children"]) == 2
-            left_expression = parse_expression(children[0], caller_context)
-            right_expression = parse_expression(children[1], caller_context)
-
-            operation_type = AssignmentOperationType.get_type(attributes["operator"])
-            operation_return_type = attributes["type"]
+        operation_return_type = expression["typeDescriptions"]["typeString"]
 
         assignement = AssignmentOperation(
             left_expression, right_expression, operation_type, operation_return_type
@@ -170,33 +144,18 @@ def parse_expression(expression: Dict, caller_context: CallerContextExpression) 
 
         assert "children" not in expression
 
-        if is_compact_ast:
-            value = expression.get("value", None)
-            if value:
-                if "subdenomination" in expression and expression["subdenomination"]:
-                    subdenomination = expression["subdenomination"]
-            elif not value and value != "":
-                value = "0x" + expression["hexValue"]
-            type_candidate = expression["typeDescriptions"]["typeString"]
+        value = expression.get("value", None)
+        if value:
+            if "subdenomination" in expression and expression["subdenomination"]:
+                subdenomination = expression["subdenomination"]
+        elif not value and value != "":
+            value = "0x" + expression["hexValue"]
+        type_candidate = expression["typeDescriptions"]["typeString"]
 
-            # Length declaration for array was None until solc 0.5.5
-            if type_candidate is None:
-                if expression["kind"] == "number":
-                    type_candidate = "int_const"
-        else:
-            value = expression["attributes"].get("value", None)
-            if value:
-                if (
-                    "subdenomination" in expression["attributes"]
-                    and expression["attributes"]["subdenomination"]
-                ):
-                    subdenomination = expression["attributes"]["subdenomination"]
-            elif value is None:
-                # for literal declared as hex
-                # see https://solidity.readthedocs.io/en/v0.4.25/types.html?highlight=hex#hexadecimal-literals
-                assert "hexvalue" in expression["attributes"]
-                value = "0x" + expression["attributes"]["hexvalue"]
-            type_candidate = expression["attributes"]["type"]
+        # Length declaration for array was None until solc 0.5.5
+        if type_candidate is None:
+            if expression["kind"] == "number":
+                type_candidate = "int_const"
 
         if type_candidate is None:
             if value.isdecimal():
@@ -220,13 +179,8 @@ def parse_expression(expression: Dict, caller_context: CallerContextExpression) 
 
         t = None
 
-        if caller_context.is_compact_ast:
-            value = expression["name"]
-            t = expression["typeDescriptions"]["typeString"]
-        else:
-            value = expression["attributes"]["value"]
-            if "type" in expression["attributes"]:
-                t = expression["attributes"]["type"]
+        value = expression["name"]
+        t = expression["typeDescriptions"]["typeString"]
 
         if t:
             found = re.findall(r"[struct|enum|function|modifier] \(([\[\] ()a-zA-Z0-9\.,_]*)\)", t)
@@ -250,15 +204,36 @@ def parse_expression(expression: Dict, caller_context: CallerContextExpression) 
         return identifier
 
     if name == "IndexAccess":
-       return Expression
-       pass
+        index_type = expression["typeDescriptions"]["typeString"]
+        left = expression["baseExpression"]
+        right = expression.get("indexExpression", None)
+        if right is None:
+            ret = parse_expression(left, caller_context)
+            # Nested array are not yet available in abi.decode
+            if isinstance(ret, ElementaryTypeNameExpression):
+                old_type = ret.type
+                ret.type = ArrayType(old_type, None)
+            return ret
+
+        left_expression = parse_expression(left, caller_context)
+        right_expression = parse_expression(right, caller_context)
+        index = IndexAccess(left_expression, right_expression, index_type)
+        index.set_offset(src, caller_context.compilation_unit)
+        return index
 
     if name == "MemberAccess":
        return Expression
        pass
     if name == "ElementaryTypeNameExpression":
-       return Expression
-       pass
+        value = expression["typeName"]
+
+        if isinstance(value, dict):
+            t = parse_type(value, caller_context)
+        else:
+            t = parse_type(UnknownType(value), caller_context)
+        e = ElementaryTypeNameExpression(t)
+        e.set_offset(expression["src"], caller_context.compilation_unit)
+        return e
 
     # NewExpression is not a root expression, it's always the child of another expression
     if name == "NewExpression":

@@ -5,6 +5,7 @@ from mythril.ast.core.declarations.function_contract import FunctionContract
 from mythril.ast.core.declarations.function import Function
 from mythril.ast.core.declarations.contract import Contract
 from mythril.ast.core.compilation_unit import StaticCompilationUnit
+from mythril.analysis.warning_issue import WarningIssues
 class UnusedFunction(DetectionModule):
     def __init__(self):
         super().__init__(module_type=ModuleType.STATIC)
@@ -13,7 +14,7 @@ class UnusedFunction(DetectionModule):
         self.compilation_unit = compilation_unit
 
     def _execute(self):
-        results = []
+        issues = []
 
         functions_used = set()
         for contract in self.compilation_unit.contracts_derived:
@@ -48,6 +49,16 @@ class UnusedFunction(DetectionModule):
             # Continue if the functon is not implemented because it means the contract is abstract
             if not function.is_implemented:
                 continue
-            info = [function, " is never used and should be removed\n"]
-            print(function, " is never used and should be removed\n")
+            issue = WarningIssues(
+                contract=function.contract.name,
+                swc_id=131,
+                title="Unused Function",
+                severity="Medium",
+                filename=function.source_mapping.filename.short,
+                description="Function is never use in contract",
+                code=function.source_mapping.code,
+                lineno=function.source_mapping.get_lines_str(),
+            )
+            issues.append(issue)
+        return issues
         

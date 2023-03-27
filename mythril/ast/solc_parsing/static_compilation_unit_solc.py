@@ -335,7 +335,6 @@ class StaticCompilationUnitSolc(CallerContextExpression):
         # contract.set_is_analyzed(True)
         pass
     def analyze_contracts(self):  # pylint: disable=too-many-statements,too-many-branches
-        print("\n================ANALYZE CONTRACT================\n")
         if not self._parsed:
             raise StaticException("Parse the contract before running analyses")
         self._convert_to_astir()

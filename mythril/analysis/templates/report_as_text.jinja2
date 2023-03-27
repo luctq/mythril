@@ -7,7 +7,9 @@ Contract: {{ issue.contract | default("Unknown") }}
 {% if issue.function %}
 Function name: {{ issue.function }}
 {% endif %}
+{% if issue.address %}
 PC address: {{ issue.address }}
+{% endif%}
 {% if issue.min_gas_used or issue.max_gas_used %}
 Estimated Gas Usage: {{ issue.min_gas_used }} - {{ issue.max_gas_used }}
 {% endif %}

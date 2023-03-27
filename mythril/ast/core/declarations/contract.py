@@ -259,6 +259,13 @@ class Contract(SourceMapping):
     def add_variables_ordered(self, new_vars: List["StateVariable"]):
         self._variables_ordered += new_vars
 
+    @property
+    def state_variables_declared(self) -> List["StateVariable"]:
+        """
+        list(StateVariable): List of the state variables declared within the contract (not inherited)
+        """
+        return [s for s in self.state_variables if s.contract == self]
+
     def available_elements_from_inheritances(
         self,
         elements: Dict[str, "Function"],
