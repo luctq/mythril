@@ -464,6 +464,20 @@ class Function(SourceMapping, metaclass=ABCMeta):
         self._returns.append(r)
     
     @property
+    def full_name(self) -> str:
+        """
+        str: func_name(type1,type2)
+        Return the function signature without the return values
+        The difference between this function and solidity_function is that full_name does not translate the underlying
+        type (ex: structure, contract to address, ...)
+        """
+        if self._full_name is None:
+            name, parameters, _ = self.signature
+            full_name = ".".join(self._internal_scope + [name]) + "(" + ",".join(parameters) + ")"
+            self._full_name = full_name
+        return self._full_name
+
+    @property
     @abstractmethod
     def canonical_name(self) -> str:
         """

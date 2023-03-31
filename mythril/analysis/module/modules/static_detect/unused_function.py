@@ -38,7 +38,7 @@ class UnusedFunction(DetectionModule):
                 or function.is_constructor
                 or function.is_fallback
                 or function.is_constructor_variables
-        ):
+            ):
                 continue
             if function.canonical_name in functions_used:
                 continue

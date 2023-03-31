@@ -4,6 +4,11 @@ from mythril.ast.core.source_mapping.source_mapping import SourceMapping
 from mythril.ast.core.declarations.function_contract import FunctionContract
 from mythril.ast.core.declarations.function import Function, FunctionLanguage
 from mythril.ast.core.declarations.modifier import Modifier
+from mythril.ast.core.declarations.structure_contract import StructureContract
+from mythril.ast.core.declarations.enum_contract import EnumContract
+from mythril.ast.core.declarations.event import Event
+from mythril.ast.core.declarations.custom_error_contract import CustomErrorContract
+
 if TYPE_CHECKING:
     from mythril.ast.core.compilation_unit import StaticCompilationUnit
     from mythril.ast.core.scope.scope import FileScope
@@ -20,15 +25,15 @@ class Contract(SourceMapping):
         # Constructors called on contract's definition
         # contract B is A(1) { ..
         self._explicit_base_constructor_calls: List["Contract"] = []
-        # self._enums: Dict[str, "EnumContract"] = {}
-        # self._structures: Dict[str, "StructureContract"] = {}
-        # self._events: Dict[str, "Event"] = {}
+        self._enums: Dict[str, "EnumContract"] = {}
+        self._structures: Dict[str, "StructureContract"] = {}
+        self._events: Dict[str, "Event"] = {}
         self._variables: Dict[str, "StateVariable"] = {}
         self._variables_ordered: List["StateVariable"] = []
         self._modifiers: Dict[str, "Modifier"] = {}
         self._functions: Dict[str, "FunctionContract"] = {}
         # self._linearizedBaseContracts: List[int] = []
-        # self._custom_errors: Dict[str, "CustomErrorContract"] = {}
+        self._custom_errors: Dict[str, "CustomErrorContract"] = {}
         self._all_functions_called: Optional[List["InternalCallType"]] = None
 
         self._kind: Optional[str] = None
@@ -133,6 +138,18 @@ class Contract(SourceMapping):
         list(Modifier): List of the modifiers
         """
         return list(self._modifiers.values())
+    
+    def available_modifiers_as_dict(self) -> Dict[str, "Modifier"]:
+        return {m.full_name: m for m in self._modifiers.values() if not m.is_shadowed}
+
+    def set_modifiers(self, modifiers: Dict[str, "Modifier"]):
+        """
+        Set the modifiers
+
+        :param modifiers:  dict full_name -> modifier
+        :return:
+        """
+        self._modifiers = modifiers
 
     @property
     def is_library(self) -> bool:
@@ -141,6 +158,87 @@ class Contract(SourceMapping):
     @is_library.setter
     def is_library(self, is_library: bool):
         self._is_library = is_library
+
+
+    @property
+    def structures(self) -> List["StructureContract"]:
+        """
+        list(Structure): List of the structures
+        """
+        return list(self._structures.values())
+
+    @property
+    def structures_inherited(self) -> List["StructureContract"]:
+        """
+        list(Structure): List of the inherited structures
+        """
+        return [s for s in self.structures if s.contract != self]
+
+    @property
+    def structures_declared(self) -> List["StructureContract"]:
+        """
+        list(Structues): List of the structures declared within the contract (not inherited)
+        """
+        return [s for s in self.structures if s.contract == self]
+
+    @property
+    def structures_as_dict(self) -> Dict[str, "StructureContract"]:
+        return self._structures
+    
+
+    @property
+    def enums(self) -> List["EnumContract"]:
+        return list(self._enums.values())
+
+    @property
+    def enums_inherited(self) -> List["EnumContract"]:
+        """
+        list(Enum): List of the inherited enums
+        """
+        return [e for e in self.enums if e.contract != self]
+
+    @property
+    def enums_declared(self) -> List["EnumContract"]:
+        """
+        list(Enum): List of the enums declared within the contract (not inherited)
+        """
+        return [e for e in self.enums if e.contract == self]
+
+    @property
+    def enums_as_dict(self) -> Dict[str, "EnumContract"]:
+        return self._enums
+    
+    @property
+    def events(self) -> List["Event"]:
+        """
+        list(Event): List of the events
+        """
+        return list(self._events.values())
+
+    @property
+    def events_inherited(self) -> List["Event"]:
+        """
+        list(Event): List of the inherited events
+        """
+        return [e for e in self.events if e.contract != self]
+
+    @property
+    def events_declared(self) -> List["Event"]:
+        """
+        list(Event): List of the events declared within the contract (not inherited)
+        """
+        return [e for e in self.events if e.contract == self]
+
+    @property
+    def events_as_dict(self) -> Dict[str, "Event"]:
+        return self._events
+
+    @property
+    def custom_errors(self) -> List["CustomErrorContract"]:
+        """
+        list(CustomErrorContract): List of the contract's custom errors
+        """
+        return list(self._custom_errors.values())
 
     @property
     def variables(self) -> List["StateVariable"]:

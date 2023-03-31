@@ -57,7 +57,7 @@ class UnusedVariables(DetectionModule):
                         contract=var.contract.name,
                         swc_id=PRESENCE_OF_UNUSED_VARIABLES,
                         title="Unused State Variables",
-                        severity="LoMedium",
+                        severity="Medium",
                         filename=var.source_mapping.filename.short,
                         description=f"State variable '{var.name}'  is never use in contract {c.name}.\nRemove all unused variables from the code base.",
                         code=var.source_mapping.code.strip(),

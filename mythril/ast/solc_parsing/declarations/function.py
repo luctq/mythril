@@ -336,6 +336,122 @@ class FunctionSolc(CallerContextExpression):
             link_underlying_nodes(condition_node, endIf_node)
         return endIf_node
 
+    def _parse_while(self, whilte_statement: Dict, node: NodeSolc) -> NodeSolc:
+        # WhileStatement = 'while' '(' Expression ')' Statement
+
+        node_startWhile = self._new_node(
+            NodeType.STARTLOOP, whilte_statement["src"], node.underlying_node.scope
+        )
+
+        body_scope = Scope(node.underlying_node.scope.is_checked, False, node.underlying_node.scope)
+
+        node_condition = self._new_node(
+                NodeType.IFLOOP, whilte_statement["condition"]["src"], node.underlying_node.scope
+            )
+        node_condition.add_unparsed_expression(whilte_statement["condition"])
+        statement = self._parse_statement(whilte_statement["body"], node_condition, body_scope)
+
+        node_endWhile = self._new_node(
+            NodeType.ENDLOOP, whilte_statement["src"], node.underlying_node.scope
+        )
+
+        link_underlying_nodes(node, node_startWhile)
+        link_underlying_nodes(node_startWhile, node_condition)
+        link_underlying_nodes(statement, node_condition)
+        link_underlying_nodes(node_condition, node_endWhile)
+
+        return node_endWhile
+
+    def _parse_for(self, statement: Dict, node: NodeSolc) -> NodeSolc:
+        # ForStatement = 'for' '(' (SimpleStatement)? ';' (Expression)? ';' (ExpressionStatement)? ')' Statement
+        
+        body = statement["body"]
+        pre = statement.get("initializationExpression", None)
+        cond = statement.get("condition", None)
+        post = statement.get("loopExpression", None)
+
+        node_startLoop = self._new_node(
+            NodeType.STARTLOOP, statement["src"], node.underlying_node.scope
+        )
+        node_endLoop = self._new_node(
+            NodeType.ENDLOOP, statement["src"], node.underlying_node.scope
+        )
+
+        last_scope = node.underlying_node.scope
+
+        if pre:
+            pre_scope = Scope(node.underlying_node.scope.is_checked, False, last_scope)
+            last_scope = pre_scope
+            node_init_expression = self._parse_statement(pre, node, pre_scope)
+            link_underlying_nodes(node_init_expression, node_startLoop)
+        else:
+            link_underlying_nodes(node, node_startLoop)
+
+        if cond:
+            cond_scope = Scope(node.underlying_node.scope.is_checked, False, last_scope)
+            last_scope = cond_scope
+            node_condition = self._new_node(NodeType.IFLOOP, cond["src"], cond_scope)
+            node_condition.add_unparsed_expression(cond)
+            link_underlying_nodes(node_startLoop, node_condition)
+
+            node_beforeBody = node_condition
+        else:
+            node_condition = None
+            node_beforeBody = node_startLoop
+
+        body_scope = Scope(node.underlying_node.scope.is_checked, False, last_scope)
+        last_scope = body_scope
+        node_body = self._parse_statement(body, node_beforeBody, body_scope)
+
+        if post:
+            node_loopexpression = self._parse_statement(post, node_body, last_scope)
+            link_underlying_nodes(node_loopexpression, node_beforeBody)
+        else:
+            # node_loopexpression = None
+            link_underlying_nodes(node_body, node_beforeBody)
+
+        if node_condition:
+            link_underlying_nodes(node_condition, node_endLoop)
+        else:
+            link_underlying_nodes(
+                node_startLoop, node_endLoop
+            )  # this is an infinite loop but we can't break our cfg
+
+        return node_endLoop
+    
+    def _parse_dowhile(self, do_while_statement: Dict, node: NodeSolc) -> NodeSolc:
+
+        node_startDoWhile = self._new_node(
+            NodeType.STARTLOOP, do_while_statement["src"], node.underlying_node.scope
+        )
+        condition_scope = Scope(
+            node.underlying_node.scope.is_checked, False, node.underlying_node.scope
+        )
+
+        node_condition = self._new_node(
+            NodeType.IFLOOP, do_while_statement["condition"]["src"], condition_scope
+        )
+        node_condition.add_unparsed_expression(do_while_statement["condition"])
+        statement = self._parse_statement(
+            do_while_statement["body"], node_condition, condition_scope
+        )
+
+        body_scope = Scope(node.underlying_node.scope.is_checked, False, condition_scope)
+        node_endDoWhile = self._new_node(NodeType.ENDLOOP, do_while_statement["src"], body_scope)
+
+        link_underlying_nodes(node, node_startDoWhile)
+        # empty block, loop from the start to the condition
+        if not node_condition.underlying_node.sons:
+            link_underlying_nodes(node_startDoWhile, node_condition)
+        else:
+            link_nodes(
+                node_startDoWhile.underlying_node,
+                node_condition.underlying_node.sons[0],
+            )
+        link_underlying_nodes(statement, node_condition)
+        link_underlying_nodes(node_condition, node_endDoWhile)
+        return node_endDoWhile
+
     def _parse_statement(
         self, statement: Dict, node: NodeSolc, scope: Union[Scope, Function]
     ) -> NodeSolc:
@@ -354,9 +470,9 @@ class FunctionSolc(CallerContextExpression):
         if name == "IfStatement":
             node = self._parse_if(statement, node)
         elif name == "WhileStatement":
-            pass
+            node = self._parse_while(statement, node)
         elif name == "ForStatement":
-            pass
+            node = self._parse_for(statement, node)
         elif name == "Block":
             node = self._parse_block(statement, node)
         elif name == "UncheckedBlock":
@@ -365,7 +481,7 @@ class FunctionSolc(CallerContextExpression):
             # Added with solc 0.6 - the yul code is an AST
             pass
         elif name == "DoWhileStatement":
-            pass
+            node = self._parse_dowhile(statement, node)
         # For Continue / Break / Return / Throw
         # The is fixed later
         elif name == "Continue":
@@ -408,7 +524,7 @@ class FunctionSolc(CallerContextExpression):
             link_underlying_nodes(node, new_node)
             node = new_node
         elif name == "TryStatement":
-            pass
+            node = self._parse_try_catch(statement, node)
         # elif name == 'TryCatchClause':
         #     self._parse_catch(statement, node)
         elif name == "RevertStatement":

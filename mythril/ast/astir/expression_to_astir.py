@@ -30,8 +30,13 @@ from mythril.ast.astir.operations.unpack import Unpack
 from mythril.ast.astir.operations.return_operation import Return
 from mythril.ast.astir.operations.operation import Operation
 from mythril.ast.astir.operations.binary import Binary, BinaryType
+from mythril.ast.astir.operations.internal_call import InternalCall
+from mythril.ast.astir.operations.unary import Unary
+from mythril.ast.astir.operations.delete import Delete
 
 from mythril.ast.astir.tmp_operations.tmp_new_array import TmpNewArray
+from mythril.ast.astir.tmp_operations.tmp_call import TmpCall
+from mythril.ast.astir.tmp_operations.argument import Argument
 
 from mythril.ast.astir.variables.constant import Constant
 from mythril.ast.astir.variables.reference import ReferenceVariable
@@ -229,10 +234,113 @@ class ExpressionToAstIR(ExpressionVisitor):
 
         set_val(expression, val)
 
+
     def _post_call_expression(
-        self, expression
-    ):
-        pass
+            self, expression
+        ):  # pylint: disable=too-many-branches,too-many-statements,too-many-locals
+
+        assert isinstance(expression, CallExpression)
+
+        expression_called = expression.called
+        called = get(expression_called)
+
+        args = [get(a) for a in expression.arguments if a]
+        for arg in args:
+            arg_ = Argument(arg)
+            arg_.set_expression(expression)
+            self._result.append(arg_)
+        if isinstance(called, Function):
+            # internal call
+
+            # If tuple
+            if expression.type_call.startswith("tuple(") and expression.type_call != "tuple()":
+                val = TupleVariable(self._node)
+            else:
+                val = TemporaryVariable(self._node)
+            internal_call = InternalCall(called, len(args), val, expression.type_call)
+            internal_call.set_expression(expression)
+            self._result.append(internal_call)
+            set_val(expression, val)
+
+        # User defined types
+        elif (
+            isinstance(called, TypeAlias)
+            and isinstance(expression_called, MemberAccess)
+            and expression_called.member_name in ["wrap", "unwrap"]
+            and len(args) == 1
+        ):
+            # wrap: underlying_type -> alias
+            # unwrap: alias -> underlying_type
+            dest_type = (
+                called if expression_called.member_name == "wrap" else called.underlying_type
+            )
+            val = TemporaryVariable(self._node)
+            var = TypeConversion(val, args[0], dest_type)
+            var.set_expression(expression)
+            val.set_type(dest_type)
+            self._result.append(var)
+            set_val(expression, val)
+
+        # yul things
+        elif called.name == "caller()":
+            val = TemporaryVariable(self._node)
+            var = Assignment(val, SolidityVariableComposed("msg.sender"), "uint256")
+            self._result.append(var)
+            set_val(expression, val)
+        elif called.name == "origin()":
+            val = TemporaryVariable(self._node)
+            var = Assignment(val, SolidityVariableComposed("tx.origin"), "uint256")
+            self._result.append(var)
+            set_val(expression, val)
+        elif called.name == "extcodesize(uint256)":
+            val = ReferenceVariable(self._node)
+            var = Member(args[0], Constant("codesize"), val)
+            self._result.append(var)
+            set_val(expression, val)
+        elif called.name == "selfbalance()":
+            val = TemporaryVariable(self._node)
+            var = TypeConversion(val, SolidityVariable("this"), ElementaryType("address"))
+            val.set_type(ElementaryType("address"))
+            self._result.append(var)
+
+            val1 = ReferenceVariable(self._node)
+            var1 = Member(val, Constant("balance"), val1)
+            self._result.append(var1)
+            set_val(expression, val1)
+        elif called.name == "address()":
+            val = TemporaryVariable(self._node)
+            var = TypeConversion(val, SolidityVariable("this"), ElementaryType("address"))
+            val.set_type(ElementaryType("address"))
+            self._result.append(var)
+            set_val(expression, val)
+        elif called.name == "callvalue()":
+            val = TemporaryVariable(self._node)
+            var = Assignment(val, SolidityVariableComposed("msg.value"), "uint256")
+            self._result.append(var)
+            set_val(expression, val)
+
+        else:
+            # If tuple
+            if expression.type_call.startswith("tuple(") and expression.type_call != "tuple()":
+                val = TupleVariable(self._node)
+            else:
+                val = TemporaryVariable(self._node)
+
+            message_call = TmpCall(called, len(args), val, expression.type_call)
+            message_call.set_expression(expression)
+            # Gas/value are only accessible here if the syntax {gas: , value: }
+            # Is used over .gas().value()
+            if expression.call_gas:
+                call_gas = get(expression.call_gas)
+                message_call.call_gas = call_gas
+            if expression.call_value:
+                call_value = get(expression.call_value)
+                message_call.call_value = call_value
+            if expression.call_salt:
+                call_salt = get(expression.call_salt)
+                message_call.call_salt = call_salt
+            self._result.append(message_call)
+            set_val(expression, val)
 
     def _post_conditional_expression(self, expression):
         pass
@@ -298,5 +406,54 @@ class ExpressionToAstIR(ExpressionVisitor):
     def _post_unary_operation(
         self, expression
     ):
-       pass
+        value = get(expression.expression)
+        if expression.type in [UnaryOperationType.BANG, UnaryOperationType.TILD]:
+            lvalue = TemporaryVariable(self._node)
+            operation = Unary(lvalue, value, expression.type)
+            operation.set_expression(expression)
+            self._result.append(operation)
+            set_val(expression, lvalue)
+        elif expression.type in [UnaryOperationType.DELETE]:
+            operation = Delete(value, value)
+            operation.set_expression(expression)
+            self._result.append(operation)
+            set_val(expression, value)
+        elif expression.type in [UnaryOperationType.PLUSPLUS_PRE]:
+            operation = Binary(value, value, Constant("1", value.type), BinaryType.ADDITION)
+            operation.set_expression(expression)
+            self._result.append(operation)
+            set_val(expression, value)
+        elif expression.type in [UnaryOperationType.MINUSMINUS_PRE]:
+            operation = Binary(value, value, Constant("1", value.type), BinaryType.SUBTRACTION)
+            operation.set_expression(expression)
+            self._result.append(operation)
+            set_val(expression, value)
+        elif expression.type in [UnaryOperationType.PLUSPLUS_POST]:
+            lvalue = TemporaryVariable(self._node)
+            operation = Assignment(lvalue, value, value.type)
+            operation.set_expression(expression)
+            self._result.append(operation)
+            operation = Binary(value, value, Constant("1", value.type), BinaryType.ADDITION)
+            operation.set_expression(expression)
+            self._result.append(operation)
+            set_val(expression, lvalue)
+        elif expression.type in [UnaryOperationType.MINUSMINUS_POST]:
+            lvalue = TemporaryVariable(self._node)
+            operation = Assignment(lvalue, value, value.type)
+            operation.set_expression(expression)
+            self._result.append(operation)
+            operation = Binary(value, value, Constant("1", value.type), BinaryType.SUBTRACTION)
+            operation.set_expression(expression)
+            self._result.append(operation)
+            set_val(expression, lvalue)
+        elif expression.type in [UnaryOperationType.PLUS_PRE]:
+            set_val(expression, value)
+        elif expression.type in [UnaryOperationType.MINUS_PRE]:
+            lvalue = TemporaryVariable(self._node)
+            operation = Binary(lvalue, Constant("0", value.type), value, BinaryType.SUBTRACTION)
+            operation.set_expression(expression)
+            self._result.append(operation)
+            set_val(expression, lvalue)
+        else:
+            raise AstIRError(f"Unary operation to IR not supported {expression}")
 

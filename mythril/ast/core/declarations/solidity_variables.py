@@ -1,6 +1,7 @@
-from typing import Dict, List
+from typing import Dict, List, Union
 from mythril.ast.core.source_mapping.source_mapping import SourceMapping
 from mythril.ast.core.solidity_types.elementary_type import ElementaryType
+from mythril.ast.core.solidity_types.type_information import TypeInformation
 from mythril.exceptions import StaticException
 
 SOLIDITY_VARIABLES = {
@@ -134,4 +135,37 @@ class SolidityVariableComposed(SolidityVariable):
         return hash(self.name)
 
 class SolidityFunction(SourceMapping):
-    pass
+    
+    def __init__(self, name: str):
+        super().__init__()
+        assert name in SOLIDITY_FUNCTIONS
+        self._name = name
+        # Can be TypeInformation if type(address) is used
+        self._return_type: List[Union[TypeInformation, ElementaryType]] = [
+            ElementaryType(x) for x in SOLIDITY_FUNCTIONS[self.name]
+        ]
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def full_name(self) -> str:
+        return self.name
+
+    @property
+    def return_type(self) -> List[Union[TypeInformation, ElementaryType]]:
+        return self._return_type
+
+    @return_type.setter
+    def return_type(self, r: List[Union[TypeInformation, ElementaryType]]):
+        self._return_type = r
+
+    def __str__(self):
+        return self._name
+
+    def __eq__(self, other):
+        return self.__class__ == other.__class__ and self.name == other.name
+
+    def __hash__(self):
+        return hash(self.name)

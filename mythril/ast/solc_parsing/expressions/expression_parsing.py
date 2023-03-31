@@ -12,11 +12,17 @@ from mythril.ast.core.expressions.assignment_operation import AssignmentOperatio
 from mythril.ast.core.expressions.identifier import Identifier
 from mythril.ast.core.expressions.elementary_type_name_expression import ElementaryTypeNameExpression
 from mythril.ast.core.expressions.index_acess import IndexAccess
+from mythril.ast.core.expressions.type_conversion import TypeConversion
+from mythril.ast.core.expressions.call_expression import CallExpression
+from mythril.ast.core.expressions.member_access import MemberAccess
+from mythril.ast.core.expressions.new_contract import NewContract
+from mythril.ast.core.expressions.tuple_expression import TupleExpression
 from mythril.ast.core.solidity_types.array_type import ArrayType
 from mythril.ast.core.solidity_types.elementary_type import ElementaryType
 from mythril.ast.core.expressions.literal import Literal
 from mythril.ast.solc_parsing.expressions.find_variable import find_variable
 from mythril.ast.solc_parsing.solidity_types.type_parsing import UnknownType, parse_type
+
 def filter_name(value: str) -> str:
     value = value.replace(" memory", "")
     value = value.replace(" storage", "")
@@ -51,6 +57,65 @@ def filter_name(value: str) -> str:
                 counter -= 1
         value = value[: idx + 1]
     return value
+def parse_call(expression: Dict, caller_context):  # pylint: disable=too-many-statements
+    src = expression["src"]
+    if caller_context.is_compact_ast:
+        attributes = expression
+        type_conversion = expression["kind"] == "typeConversion"
+        type_return = attributes["typeDescriptions"]["typeString"]
+
+    else:
+        attributes = expression["attributes"]
+        type_conversion = attributes["type_conversion"]
+        type_return = attributes["type"]
+
+    if type_conversion:
+        type_call = parse_type(UnknownType(type_return), caller_context)
+
+        assert len(expression["arguments"]) == 1
+        expression_to_parse = expression["arguments"][0]
+
+        expression = parse_expression(expression_to_parse, caller_context)
+        t = TypeConversion(expression, type_call)
+        t.set_offset(src, caller_context.compilation_unit)
+        return t
+
+    call_gas = None
+    call_value = None
+    call_salt = None
+
+    called = parse_expression(expression["expression"], caller_context)
+    # If the next expression is a FunctionCallOptions
+    # We can here the gas/value information
+    # This is only available if the syntax is {gas: , value: }
+    # For the .gas().value(), the member are considered as function call
+    # And converted later to the correct info (convert.py)
+    if expression["expression"][caller_context.get_key()] == "FunctionCallOptions":
+        call_with_options = expression["expression"]
+        for idx, name in enumerate(call_with_options.get("names", [])):
+            option = parse_expression(call_with_options["options"][idx], caller_context)
+            if name == "value":
+                call_value = option
+            if name == "gas":
+                call_gas = option
+            if name == "salt":
+                call_salt = option
+    arguments = []
+    if expression["arguments"]:
+        arguments = [parse_expression(a, caller_context) for a in expression["arguments"]]
+    # if isinstance(called, SuperCallExpression):
+    #     sp = SuperCallExpression(called, arguments, type_return)
+    #     sp.set_offset(expression["src"], caller_context.compilation_unit)
+    #     return sp
+    call_expression = CallExpression(called, arguments, type_return)
+    call_expression.set_offset(src, caller_context.compilation_unit)
+
+    # Only available if the syntax {gas:, value:} was used
+    call_expression.call_gas = call_gas
+    call_expression.call_value = call_value
+    call_expression.call_salt = call_salt
+    return call_expression
+
 def parse_expression(expression: Dict, caller_context: CallerContextExpression) -> "Expression":
     """
 
@@ -108,11 +173,13 @@ def parse_expression(expression: Dict, caller_context: CallerContextExpression) 
         return binary_op
 
     if name in "FunctionCall":
-        pass
+        return parse_call(expression, caller_context)
 
     if name == "FunctionCallOptions":
-        pass
-
+        called = parse_expression(expression["expression"], caller_context)
+        assert isinstance(called, (MemberAccess, NewContract, Identifier, TupleExpression))
+        return called
+   
     if name == "TupleExpression":
         pass
 
@@ -245,9 +312,8 @@ def parse_expression(expression: Dict, caller_context: CallerContextExpression) 
         pass
 
     if name == "IndexRangeAccess":
-        return Expression
-        pass
-
+        base = parse_expression(expression["baseExpression"], caller_context)
+        return base
     # Introduced with solc 0.8
     if name == "IdentifierPath":
         return Expression
