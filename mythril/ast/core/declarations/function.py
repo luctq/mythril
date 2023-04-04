@@ -134,9 +134,9 @@ class Function(SourceMapping, metaclass=ABCMeta):
         if self._function_type == FunctionType.RECEIVE:
             return "receive"
         if self._function_type == FunctionType.CONSTRUCTOR_VARIABLES:
-            return "slitherConstructorVariables"
+            return "ConstructorVariables"
         if self._function_type == FunctionType.CONSTRUCTOR_CONSTANT_VARIABLES:
-            return "slitherConstructorConstantVariables"
+            return "ConstructorConstantVariables"
         return self._name
     @property
     def is_checked(self) -> bool:

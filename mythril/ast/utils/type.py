@@ -12,7 +12,6 @@ def _convert_type_for_solidity_signature_to_string(
     if isinstance(types, Type):
         # Array might be struct, so we need to go again through the conversion here
         # We could have this logic in convert_type_for_solidity_signature
-        # But the slither type system is not straightforward to manipulate here
         # And it would require to create a new ArrayType, which a potential List[Type] as input
         # Which is currently not supported. This comes down to (uint, uint)[] not being possible in Solidity
         # While having an array of a struct of two uint leads to a (uint, uint)[] signature

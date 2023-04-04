@@ -185,6 +185,16 @@ class Contract(SourceMapping):
     def structures_as_dict(self) -> Dict[str, "StructureContract"]:
         return self._structures
     
+    @property
+    def custom_errors(self) -> List["CustomErrorContract"]:
+        """
+        list(CustomErrorContract): List of the contract's custom errors
+        """
+        return list(self._custom_errors.values())
+
+    @property
+    def custom_errors_as_dict(self) -> Dict[str, "CustomErrorContract"]:
+        return self._custom_errors
 
     @property
     def enums(self) -> List["EnumContract"]:

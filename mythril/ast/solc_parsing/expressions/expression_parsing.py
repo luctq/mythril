@@ -3,8 +3,9 @@ from typing import TYPE_CHECKING, Dict
 
 from mythril.ast.solc_parsing.declarations.caller_context import CallerContextExpression
 
+from mythril.ast.core.declarations.solidity_variables import SolidityVariableComposed, SOLIDITY_VARIABLES_COMPOSED
 from mythril.ast.core.expressions.expression import Expression
-from mythril.ast.solc_parsing.exceptions import ParsingError
+from mythril.ast.solc_parsing.exceptions import ParsingError, VariableNotFound
 from mythril.ast.core.expressions.unary_operation import UnaryOperation, UnaryOperationType
 from mythril.ast.core.expressions.binary_operation import BinaryOperation, BinaryOperationType
 from mythril.ast.core.expressions.conditional_expression import ConditionalExpression
@@ -17,12 +18,12 @@ from mythril.ast.core.expressions.call_expression import CallExpression
 from mythril.ast.core.expressions.member_access import MemberAccess
 from mythril.ast.core.expressions.new_contract import NewContract
 from mythril.ast.core.expressions.tuple_expression import TupleExpression
+from mythril.ast.core.expressions.super_identifier import SuperIdentifier
 from mythril.ast.core.solidity_types.array_type import ArrayType
 from mythril.ast.core.solidity_types.elementary_type import ElementaryType
 from mythril.ast.core.expressions.literal import Literal
 from mythril.ast.solc_parsing.expressions.find_variable import find_variable
 from mythril.ast.solc_parsing.solidity_types.type_parsing import UnknownType, parse_type
-
 def filter_name(value: str) -> str:
     value = value.replace(" memory", "")
     value = value.replace(" storage", "")
@@ -59,15 +60,10 @@ def filter_name(value: str) -> str:
     return value
 def parse_call(expression: Dict, caller_context):  # pylint: disable=too-many-statements
     src = expression["src"]
-    if caller_context.is_compact_ast:
-        attributes = expression
-        type_conversion = expression["kind"] == "typeConversion"
-        type_return = attributes["typeDescriptions"]["typeString"]
+    attributes = expression
+    type_conversion = expression["kind"] == "typeConversion"
+    type_return = attributes["typeDescriptions"]["typeString"]
 
-    else:
-        attributes = expression["attributes"]
-        type_conversion = attributes["type_conversion"]
-        type_return = attributes["type"]
 
     if type_conversion:
         type_call = parse_type(UnknownType(type_return), caller_context)
@@ -115,6 +111,27 @@ def parse_call(expression: Dict, caller_context):  # pylint: disable=too-many-st
     call_expression.call_value = call_value
     call_expression.call_salt = call_salt
     return call_expression
+
+def parse_super_name(expression: Dict, is_compact_ast: bool) -> str:
+    if is_compact_ast:
+        assert expression["nodeType"] == "MemberAccess"
+        base_name = expression["memberName"]
+        arguments = expression["typeDescriptions"]["typeString"]
+    else:
+        assert expression["name"] == "MemberAccess"
+        attributes = expression["attributes"]
+        base_name = attributes["member_name"]
+        arguments = attributes["type"]
+
+    assert arguments.startswith("function ")
+    # remove function (...()
+    arguments = arguments[len("function ") :]
+
+    arguments = filter_name(arguments)
+    if " " in arguments:
+        arguments = arguments[: arguments.find(" ")]
+
+    return base_name + arguments
 
 def parse_expression(expression: Dict, caller_context: CallerContextExpression) -> "Expression":
     """
@@ -289,8 +306,33 @@ def parse_expression(expression: Dict, caller_context: CallerContextExpression) 
         return index
 
     if name == "MemberAccess":
-       return Expression
-       pass
+        member_name = expression["memberName"]
+        member_type = expression["typeDescriptions"]["typeString"]
+        # member_type = parse_type(
+        #     UnknownType(expression["typeDescriptions"]["typeString"]), caller_context
+        # )
+        member_expression = parse_expression(expression["expression"], caller_context)
+        if str(member_expression) == "super":
+            super_name = parse_super_name(expression, is_compact_ast)
+            var, was_created = find_variable(super_name, caller_context, is_super=True)
+            if var is None:
+                raise VariableNotFound(f"Variable not found: {super_name}")
+            if was_created:
+                var.set_offset(src, caller_context.compilation_unit)
+            sup = SuperIdentifier(var)
+            sup.set_offset(src, caller_context.compilation_unit)
+
+            var.references.append(sup.source_mapping)
+
+            return sup
+        member_access = MemberAccess(member_name, member_type, member_expression)
+        member_access.set_offset(src, caller_context.compilation_unit)
+        if str(member_access) in SOLIDITY_VARIABLES_COMPOSED:
+            id_idx = Identifier(SolidityVariableComposed(str(member_access)))
+            id_idx.set_offset(src, caller_context.compilation_unit)
+            return id_idx
+        return member_access
+    
     if name == "ElementaryTypeNameExpression":
         value = expression["typeName"]
 
@@ -308,8 +350,14 @@ def parse_expression(expression: Dict, caller_context: CallerContextExpression) 
         pass
 
     if name == "ModifierInvocation":
-        return Expression
-        pass
+        called = parse_expression(expression["modifierName"], caller_context)
+        arguments = []
+        if expression.get("arguments", None):
+            arguments = [parse_expression(a, caller_context) for a in expression["arguments"]]
+        
+        call = CallExpression(called, arguments, "Modifier")
+        call.set_offset(src, caller_context.compilation_unit)
+        return call
 
     if name == "IndexRangeAccess":
         base = parse_expression(expression["baseExpression"], caller_context)
