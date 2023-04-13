@@ -2,12 +2,14 @@ from typing import Optional, List, Dict, Callable, Tuple, TYPE_CHECKING, Union, 
 
 from mythril.ast.core.source_mapping.source_mapping import SourceMapping
 from mythril.ast.core.declarations.function_contract import FunctionContract
-from mythril.ast.core.declarations.function import Function, FunctionLanguage
+from mythril.ast.core.declarations.function import Function, FunctionLanguage, FunctionType
 from mythril.ast.core.declarations.modifier import Modifier
 from mythril.ast.core.declarations.structure_contract import StructureContract
 from mythril.ast.core.declarations.enum_contract import EnumContract
 from mythril.ast.core.declarations.event import Event
 from mythril.ast.core.declarations.custom_error_contract import CustomErrorContract
+from mythril.ast.core.variables.variable import Variable
+from mythril.ast.core.cfg.scope import Scope
 
 if TYPE_CHECKING:
     from mythril.ast.core.compilation_unit import StaticCompilationUnit
@@ -374,6 +376,99 @@ class Contract(SourceMapping):
         """
         return [s for s in self.state_variables if s.contract == self]
 
+    def add_constructor_variables(self):
+        from mythril.ast.core.declarations.function_contract import FunctionContract
+
+        if self.state_variables:
+            for (idx, variable_candidate) in enumerate(self.state_variables):
+                if variable_candidate.expression and not variable_candidate.is_constant:
+
+                    constructor_variable = FunctionContract(self.compilation_unit)
+                    constructor_variable.set_function_type(FunctionType.CONSTRUCTOR_VARIABLES)
+                    constructor_variable.set_contract(self)
+                    constructor_variable.set_contract_declarer(self)
+                    constructor_variable.set_visibility("internal")
+                    # For now, source mapping of the constructor variable is the whole contract
+                    # Could be improved with a targeted source mapping
+                    constructor_variable.set_offset(self.source_mapping, self.compilation_unit)
+                    self._functions[constructor_variable.canonical_name] = constructor_variable
+
+                    prev_node = self._create_node(
+                        constructor_variable, 0, variable_candidate, constructor_variable
+                    )
+                    variable_candidate.node_initialization = prev_node
+                    counter = 1
+                    for v in self.state_variables[idx + 1 :]:
+                        if v.expression and not v.is_constant:
+                            next_node = self._create_node(
+                                constructor_variable, counter, v, prev_node.scope
+                            )
+                            v.node_initialization = next_node
+                            prev_node.add_son(next_node)
+                            next_node.add_father(prev_node)
+                            prev_node = next_node
+                            counter += 1
+                    break
+
+            for (idx, variable_candidate) in enumerate(self.state_variables):
+                if variable_candidate.expression and variable_candidate.is_constant:
+
+                    constructor_variable = FunctionContract(self.compilation_unit)
+                    constructor_variable.set_function_type(
+                        FunctionType.CONSTRUCTOR_CONSTANT_VARIABLES
+                    )
+                    constructor_variable.set_contract(self)
+                    constructor_variable.set_contract_declarer(self)
+                    constructor_variable.set_visibility("internal")
+                    # For now, source mapping of the constructor variable is the whole contract
+                    # Could be improved with a targeted source mapping
+                    constructor_variable.set_offset(self.source_mapping, self.compilation_unit)
+                    self._functions[constructor_variable.canonical_name] = constructor_variable
+
+                    prev_node = self._create_node(
+                        constructor_variable, 0, variable_candidate, constructor_variable
+                    )
+                    variable_candidate.node_initialization = prev_node
+                    counter = 1
+                    for v in self.state_variables[idx + 1 :]:
+                        if v.expression and v.is_constant:
+                            next_node = self._create_node(
+                                constructor_variable, counter, v, prev_node.scope
+                            )
+                            v.node_initialization = next_node
+                            prev_node.add_son(next_node)
+                            next_node.add_father(prev_node)
+                            prev_node = next_node
+                            counter += 1
+
+                    break
+
+    def _create_node(
+        self, func: Function, counter: int, variable: "Variable", scope: Union[Scope, Function]
+    ):
+        from mythril.ast.core.cfg.node import Node, NodeType
+        from mythril.ast.core.expressions import (
+            AssignmentOperationType,
+            AssignmentOperation,
+            Identifier,
+        )
+
+        # Function uses to create node for state variable declaration statements
+        node = Node(NodeType.OTHER_ENTRYPOINT, counter, scope, func.file_scope)
+        node.set_offset(variable.source_mapping, self.compilation_unit)
+        node.set_function(func)
+        func.add_node(node)
+        assert variable.expression
+        expression = AssignmentOperation(
+            Identifier(variable),
+            variable.expression,
+            AssignmentOperationType.ASSIGN,
+            variable.type,
+        )
+
+        expression.set_offset(variable.source_mapping, self.compilation_unit)
+        node.add_expression(expression)
+        return node
     def available_elements_from_inheritances(
         self,
         elements: Dict[str, "Function"],

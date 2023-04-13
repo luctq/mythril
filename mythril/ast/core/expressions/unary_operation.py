@@ -37,7 +37,46 @@ class UnaryOperationType(Enum):
             if operation_type == "--":
                 return UnaryOperationType.MINUSMINUS_POST
         raise StaticCoreError(f"get_type: Unknown operation type {operation_type}")
+    def __str__(self):
+        if self == UnaryOperationType.BANG:
+            return "!"
+        if self == UnaryOperationType.TILD:
+            return "~"
+        if self == UnaryOperationType.DELETE:
+            return "delete"
+        if self == UnaryOperationType.PLUS_PRE:
+            return "+"
+        if self == UnaryOperationType.MINUS_PRE:
+            return "-"
+        if self in [UnaryOperationType.PLUSPLUS_PRE, UnaryOperationType.PLUSPLUS_POST]:
+            return "++"
+        if self in [
+            UnaryOperationType.MINUSMINUS_PRE,
+            UnaryOperationType.MINUSMINUS_POST,
+        ]:
+            return "--"
 
+        raise StaticCoreError(f"str: Unknown operation type {self}")
+
+    @staticmethod
+    def is_prefix(operation_type):
+        if operation_type in [
+            UnaryOperationType.BANG,
+            UnaryOperationType.TILD,
+            UnaryOperationType.DELETE,
+            UnaryOperationType.PLUSPLUS_PRE,
+            UnaryOperationType.MINUSMINUS_PRE,
+            UnaryOperationType.PLUS_PRE,
+            UnaryOperationType.MINUS_PRE,
+        ]:
+            return True
+        if operation_type in [
+            UnaryOperationType.PLUSPLUS_POST,
+            UnaryOperationType.MINUSMINUS_POST,
+        ]:
+            return False
+
+        raise SlitherCoreError(f"is_prefix: Unknown operation type {operation_type}")
 class UnaryOperation(ExpressionTyped):
     def __init__(self, expression, expression_type):
         assert isinstance(expression, Expression)
@@ -54,3 +93,20 @@ class UnaryOperation(ExpressionTyped):
             UnaryOperationType.MINUS_PRE,
         ]:
             expression.set_lvalue()
+    
+    @property
+    def expression(self) -> Expression:
+        return self._expression
+
+    @property
+    def type(self) -> UnaryOperationType:
+        return self._type
+
+    @property
+    def is_prefix(self) -> bool:
+        return UnaryOperationType.is_prefix(self._type)
+
+    def __str__(self):
+        if self.is_prefix:
+            return str(self.type) + " " + str(self._expression)
+        return str(self._expression) + " " + str(self.type)

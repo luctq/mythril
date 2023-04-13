@@ -13,3 +13,18 @@ class MemberAccess(ExpressionTyped):
         self._type: Type = member_type
         self._member_name: str = member_name
         self._expression: Expression = expression
+
+    @property
+    def expression(self) -> Expression:
+        return self._expression
+
+    @property
+    def member_name(self) -> str:
+        return self._member_name
+
+    @property
+    def type(self) -> Type:
+        return self._type
+
+    def __str__(self):
+        return str(self.expression) + "." + self.member_name

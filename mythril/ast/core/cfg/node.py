@@ -377,12 +377,16 @@ class Node(SourceMapping, ChildFunction):
         return self._variable_declaration
     
     def astir_generation(self):
-
+        print("\n===========START===============\n")
+        print("self.expression", self.expression)
+        print("self.expression", self.expression.__class__.__name__)
         if self.expression:
             expression = self.expression
             self._irs = convert_expression(expression, self)
+        print("self._irs", self._irs)
         self._find_read_write_call()
-    
+        print("\n============END==============\n")
+
     def _find_read_write_call(self):  # pylint: disable=too-many-statements
         for ir in self.irs:
 

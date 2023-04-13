@@ -91,6 +91,56 @@ class BinaryOperationType(Enum):
 
         raise StaticCoreError(f"get_type: Unknown operation type {operation_type})")
 
+    def __str__(self) -> str:  # pylint: disable=too-many-branches
+        if self == BinaryOperationType.POWER:
+            return "**"
+        if self == BinaryOperationType.MULTIPLICATION:
+            return "*"
+        if self == BinaryOperationType.DIVISION:
+            return "/"
+        if self == BinaryOperationType.MODULO:
+            return "%"
+        if self == BinaryOperationType.ADDITION:
+            return "+"
+        if self == BinaryOperationType.SUBTRACTION:
+            return "-"
+        if self == BinaryOperationType.LEFT_SHIFT:
+            return "<<"
+        if self == BinaryOperationType.RIGHT_SHIFT:
+            return ">>"
+        if self == BinaryOperationType.AND:
+            return "&"
+        if self == BinaryOperationType.CARET:
+            return "^"
+        if self == BinaryOperationType.OR:
+            return "|"
+        if self == BinaryOperationType.LESS:
+            return "<"
+        if self == BinaryOperationType.GREATER:
+            return ">"
+        if self == BinaryOperationType.LESS_EQUAL:
+            return "<="
+        if self == BinaryOperationType.GREATER_EQUAL:
+            return ">="
+        if self == BinaryOperationType.EQUAL:
+            return "=="
+        if self == BinaryOperationType.NOT_EQUAL:
+            return "!="
+        if self == BinaryOperationType.ANDAND:
+            return "&&"
+        if self == BinaryOperationType.OROR:
+            return "||"
+        if self == BinaryOperationType.DIVISION_SIGNED:
+            return "/'"
+        if self == BinaryOperationType.MODULO_SIGNED:
+            return "%'"
+        if self == BinaryOperationType.LESS_SIGNED:
+            return "<'"
+        if self == BinaryOperationType.GREATER_SIGNED:
+            return ">'"
+        if self == BinaryOperationType.RIGHT_SHIFT_ARITHMETIC:
+            return ">>'"
+        raise StaticCoreError(f"str: Unknown operation type {self})")
 class BinaryOperation(ExpressionTyped):
     def __init__(
         self,

@@ -18,7 +18,6 @@ class StaticExecCore(Context):
         self._previous_results: List = []
         # From triaged result
         self._previous_results_ids: Set[str] = set()
-        # Every slither object has a list of result from detector
         # Because of the multiple compilation support, we might analyze
         # Multiple time the same result, so we remove duplicates
         self._currently_seen_resuts: Set[str] = set()
@@ -31,7 +30,6 @@ class StaticExecCore(Context):
 
         self._markdown_root = ""
 
-        # If set to true, slither will not catch errors during parsing
         self._disallow_partial: bool = False
         self._skip_assembly: bool = False
 

@@ -28,6 +28,8 @@ def detect_unused_state_variables(contract):
 def detect_unused_local_variables(function):
     local_variables_used =  function.variables_read + function.variables_written
     local_variables = function.local_variables
+    for var in local_variables_used:
+        print("variables_used", var, var.__class__)
     return [x for x in local_variables if x not in local_variables_used]
 
 def detect_unused_parameter_variables(function):

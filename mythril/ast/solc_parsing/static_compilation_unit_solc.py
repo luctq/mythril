@@ -29,7 +29,6 @@ class StaticCompilationUnitSolc(CallerContextExpression):
         # self._using_for_top_level_parser: List[UsingForTopLevelSolc] = []
 
         self._is_compact_ast = False
-        # # self._core: SlitherCore = core
         self._compilation_unit = compilation_unit
 
         self._all_functions_and_modifier_parser: List[FunctionSolc] = []
@@ -345,6 +344,7 @@ class StaticCompilationUnitSolc(CallerContextExpression):
        for contract in self._compilation_unit.contracts:
             # contract.add_constructor_variables()
             for func in contract.functions:
+                print(f"{len(contract.functions)} function", func)
                 try: 
                     func.generate_astir_and_analyze()
                 except AttributeError as e:

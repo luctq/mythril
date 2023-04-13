@@ -307,7 +307,7 @@ class FunctionSolc(CallerContextExpression):
         
         condition = if_statement["condition"]
         # Note: check if the expression could be directly
-        # parsed here
+        # parsed here 
         condition_node = self._new_node(
             NodeType.IF, condition["src"], node.underlying_node.scope
         )

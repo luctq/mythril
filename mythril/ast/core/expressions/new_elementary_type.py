@@ -7,3 +7,10 @@ class NewElementaryType(Expression):
         assert isinstance(new_type, ElementaryType)
         super().__init__()
         self._type = new_type
+
+    @property
+    def type(self) -> ElementaryType:
+        return self._type
+
+    def __str__(self):
+        return "new " + str(self._type)

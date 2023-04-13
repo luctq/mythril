@@ -24,6 +24,7 @@ class StaticCompilationUnit(Context):
         self._all_functions: Set[Function] = set()
 
         self.counter_astir_temporary = 0
+        self.counter_astir_reference = 0
     
     @property
     def source_units(self) -> Dict[int, str]:

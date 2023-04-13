@@ -31,17 +31,21 @@ from mythril.ast.astir.operations.return_operation import Return
 from mythril.ast.astir.operations.operation import Operation
 from mythril.ast.astir.operations.binary import Binary, BinaryType
 from mythril.ast.astir.operations.internal_call import InternalCall
+from mythril.ast.astir.operations.solidity_call import SolidityCall
 from mythril.ast.astir.operations.unary import Unary
 from mythril.ast.astir.operations.delete import Delete
 
 from mythril.ast.astir.tmp_operations.tmp_new_array import TmpNewArray
 from mythril.ast.astir.tmp_operations.tmp_call import TmpCall
+from mythril.ast.astir.tmp_operations.tmp_new_contract import TmpNewContract
+from mythril.ast.astir.tmp_operations.tmp_new_element_type import TmpNewElementaryType
 from mythril.ast.astir.tmp_operations.argument import Argument
 
 from mythril.ast.astir.variables.constant import Constant
 from mythril.ast.astir.variables.reference import ReferenceVariable
 from mythril.ast.astir.variables.temporary import TemporaryVariable
 from mythril.ast.astir.variables.tuple import TupleVariable
+from mythril.ast.astir.exceptions import AstIRError
 
 key = "expressionToAstIR"
 def get(expression):
@@ -136,6 +140,7 @@ class ExpressionToAstIR(ExpressionVisitor):
         return self._result
     
     def _post_assignement_operation(self, expression):
+        print("_post_assignement_operation")
         left = get(expression.expression_left)
         right = get(expression.expression_right)
         if isinstance(left, list):  # tuple expression:
@@ -198,6 +203,7 @@ class ExpressionToAstIR(ExpressionVisitor):
                 set_val(expression, left)
 
     def _post_binary_operation(self, expression):
+        print("_post_binary_operation")
         left = get(expression.expression_left)
         right = get(expression.expression_right)
         val = TemporaryVariable(self._node)
@@ -238,7 +244,7 @@ class ExpressionToAstIR(ExpressionVisitor):
     def _post_call_expression(
             self, expression
         ):  # pylint: disable=too-many-branches,too-many-statements,too-many-locals
-
+        print("_post_binary_operation")
         assert isinstance(expression, CallExpression)
 
         expression_called = expression.called
@@ -343,15 +349,19 @@ class ExpressionToAstIR(ExpressionVisitor):
             set_val(expression, val)
 
     def _post_conditional_expression(self, expression):
+        print("_post_conditional_expression")
         pass
 
     def _post_elementary_type_name_expression(self, expression):
+        print("_post_elementary_type_name_expression")
         set_val(expression, expression.type)
 
     def _post_identifier(self, expression):
+        print("_post_identifier")
         set_val(expression, expression.value)
 
     def _post_index_access(self, expression):
+        print("_post_index_access")
         left = get(expression.expression_left)
         right = get(expression.expression_right)
         # Left can be a type for abi.decode(var, uint[2])
@@ -378,13 +388,97 @@ class ExpressionToAstIR(ExpressionVisitor):
         set_val(expression, val)
 
     def _post_literal(self, expression):
+        print("_post_literal")
         cst = Constant(expression.value, expression.type, expression.subdenomination)
         set_val(expression, cst)
 
     def _post_member_access(self, expression):
-        pass
+        print("_post_member_access")
+        expr = get(expression.expression)
+
+        # Look for type(X).max / min
+        # Because we looked at the AST structure, we need to look into the nested expression
+        # Hopefully this is always on a direct sub field, and there is no weird construction
+        if isinstance(expression.expression, CallExpression) and expression.member_name in [
+            "min",
+            "max",
+        ]:
+            if isinstance(expression.expression.called, Identifier):
+                if expression.expression.called.value == SolidityFunction("type()"):
+                    assert len(expression.expression.arguments) == 1
+                    val = TemporaryVariable(self._node)
+                    type_expression_found = expression.expression.arguments[0]
+                    if isinstance(type_expression_found, ElementaryTypeNameExpression):
+                        type_found = type_expression_found.type
+                        constant_type = type_found
+                    else:
+                        # type(enum).max/min
+                        assert isinstance(type_expression_found, Identifier)
+                        type_found = type_expression_found.value
+                        assert isinstance(type_found, Enum)
+                        constant_type = None
+                    if expression.member_name == "min":
+                        op = Assignment(
+                            val,
+                            Constant(str(type_found.min), constant_type),
+                            type_found,
+                        )
+                    else:
+                        op = Assignment(
+                            val,
+                            Constant(str(type_found.max), constant_type),
+                            type_found,
+                        )
+                    self._result.append(op)
+                    set_val(expression, val)
+                    return
+        # This does not support solidity 0.4 contract_name.balance
+        if (
+            isinstance(expr, Variable)
+            and expr.type == ElementaryType("address")
+            and expression.member_name in ["balance", "code", "codehash"]
+        ):
+            val = TemporaryVariable(self._node)
+            name = expression.member_name + "(address)"
+            sol_func = SolidityFunction(name)
+            s = SolidityCall(
+                sol_func,
+                1,
+                val,
+                sol_func.return_type,
+            )
+            s.set_expression(expression)
+            s.arguments.append(expr)
+            self._result.append(s)
+            set_val(expression, val)
+            return
+        
+        if isinstance(expr, TypeAlias) and expression.member_name in ["wrap", "unwrap"]:
+            # The logic is be handled by _post_call_expression
+            set_val(expression, expr)
+            return
+
+        if isinstance(expr, Contract):
+            # Early lookup to detect user defined types from other contracts definitions
+            # contract A { type MyInt is int}
+            # contract B { function f() public{ A.MyInt test = A.MyInt.wrap(1);}}
+            # The logic is handled by _post_call_expression
+            if expression.member_name in expr.file_scope.user_defined_types:
+                set_val(expression, expr.file_scope.user_defined_types[expression.member_name])
+                return
+            # Lookup errors referred to as member of contract e.g. Test.myError.selector
+            if expression.member_name in expr.custom_errors_as_dict:
+                set_val(expression, expr.custom_errors_as_dict[expression.member_name])
+                return
+        val = ReferenceVariable(self._node)
+        print("hello")
+        member = Member(expr, Constant(expression.member_name), val)
+        member.set_expression(expression)
+        self._result.append(member)
+        set_val(expression, val)
 
     def _post_new_array(self, expression):
+        print("_post_new_array")
         val = TemporaryVariable(self._node)
         operation = TmpNewArray(expression.depth, expression.array_type, val)
         operation.set_expression(expression)
@@ -392,20 +486,52 @@ class ExpressionToAstIR(ExpressionVisitor):
         set_val(expression, val)
 
     def _post_new_contract(self, expression):
-        pass
+        print("_post_new_contract")
+        val = TemporaryVariable(self._node)
+        operation = TmpNewContract(expression.contract_name, val)
+        operation.set_expression(expression)
+        if expression.call_value:
+            call_value = get(expression.call_value)
+            operation.call_value = call_value
+        if expression.call_salt:
+            call_salt = get(expression.call_salt)
+            operation.call_salt = call_salt
+
+        self._result.append(operation)
+        set_val(expression, val)
 
     def _post_new_elementary_type(self, expression):
-        pass
+        print(" _post_new_elementary_type")
+        # TODO unclear if this is ever used?
+        val = TemporaryVariable(self._node)
+        operation = TmpNewElementaryType(expression.type, val)
+        operation.set_expression(expression)
+        self._result.append(operation)
+        set_val(expression, val)
 
     def _post_tuple_expression(self, expression):
-        pass
+        print("_post_tuple_expression")
+        expressions = [get(e) if e else None for e in expression.expressions]
+        if len(expressions) == 1:
+            val = expressions[0]
+        else:
+            val = expressions
+        set_val(expression, val)
 
     def _post_type_conversion(self, expression):
-        pass
+        print("_post_type_conversion")
+        expr = get(expression.expression)
+        val = TemporaryVariable(self._node)
+        operation = TypeConversion(val, expr, expression.type)
+        val.set_type(expression.type)
+        operation.set_expression(expression)
+        self._result.append(operation)
+        set_val(expression, val)
 
     def _post_unary_operation(
         self, expression
     ):
+        print("_post_unary_operation")
         value = get(expression.expression)
         if expression.type in [UnaryOperationType.BANG, UnaryOperationType.TILD]:
             lvalue = TemporaryVariable(self._node)

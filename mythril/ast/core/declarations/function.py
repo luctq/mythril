@@ -221,7 +221,6 @@ class Function(SourceMapping, metaclass=ABCMeta):
     def is_constructor_variables(self) -> bool:
         """
         bool: True if the function is the constructor of the variables
-        Slither has inbuilt functions to hold the state variables initialization
         """
         return self._function_type in [
             FunctionType.CONSTRUCTOR_VARIABLES,
@@ -569,7 +568,10 @@ class Function(SourceMapping, metaclass=ABCMeta):
         return node
     
     def generate_astir_and_analyze(self):
+        if (len(self.nodes) == 13):
+            print("self[node]", self.nodes[9], self.nodes[8].__class__)
         for node in self.nodes:
+            print(f"{len(self.nodes)} node: ", node, node.is_local_variable_declaration)
             node.astir_generation()
         # tim hieu cho nay
         self._analyze_read_write()
