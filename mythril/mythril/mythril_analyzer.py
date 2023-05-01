@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
+import time
 import logging
 import traceback
 from typing import Optional, List
@@ -139,10 +139,12 @@ class MythrilAnalyzer:
         exceptions = []
         execution_info = None  # type: Optional[List[ExecutionInfo]]
 
+        start_time = time.time();
         for static_compile in self.static_compiles:
             static = StaticExec(static_compile, modules=modules)
 
         for contract in self.contracts:
+            # print(contract.solc_json)
             StartTime()  # Reinitialize start time for new contracts
             try:
                 # static = StaticExec(contract.input_file, modules=modules)
@@ -162,8 +164,10 @@ class MythrilAnalyzer:
                     disable_dependency_pruning=self.disable_dependency_pruning,
                     custom_modules_directory=self.custom_modules_directory,
                 )
+                # sym = None
                 issues = fire_lasers(sym, modules)
                 execution_info = sym.execution_info
+                # execution_info = ""
                 # issues = []
             except DetectorNotFoundError as e:
                 # Bubble up
@@ -195,5 +199,5 @@ class MythrilAnalyzer:
         )
         for issue in all_issues:
             report.append_issue(issue)
-            
+        print("--- %s seconds ---" % (time.time() - start_time))  
         return report

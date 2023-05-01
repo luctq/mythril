@@ -1,11 +1,11 @@
 from mythril.analysis.module.base import DetectionModule, ModuleType
-from mythril.ast.core.compilation_unit import StaticCompilationUnit
+from mythril.solidity.ast.core.compilation_unit import StaticCompilationUnit
 
-from mythril.ast.core.declarations.solidity_variables import SolidityFunction, SolidityVariableComposed
-from mythril.ast.core.cfg.node import NodeType
-from mythril.ast.astir.operations.low_level_call import LowLevelCall
-from mythril.ast.astir.export_values import ExportValues
-
+from mythril.solidity.ast.core.declarations.solidity_variables import SolidityFunction, SolidityVariableComposed
+from mythril.solidity.ast.core.cfg.node import NodeType
+from mythril.solidity.ast.astir.operations.low_level_call import LowLevelCall
+from mythril.solidity.ast.astir.export_values import ExportValues
+from mythril.analysis.warning_issue import WarningIssues
 class DeprecatedStandards(DetectionModule):
     """
     Use of Deprecated Standards
@@ -114,18 +114,24 @@ class DeprecatedStandards(DetectionModule):
             list: {'vuln', 'filename,'contract','func', 'deprecated_references'}
 
         """
-        results = []
+        issues = []
         for contract in self.compilation_unit.contracts:
             deprecated_references = self.detect_deprecated_references_in_contract(contract)
             if deprecated_references:
                 for deprecated_reference in deprecated_references:
                     source_object = deprecated_reference[0]
                     deprecated_entries = deprecated_reference[1]
-                    info = ["Deprecated standard detected ", source_object, ":\n"]
-
-                    for (_dep_id, original_desc, recommended_disc) in deprecated_entries:
-                        info += [
-                            f'\t- Usage of "{original_desc}" should be replaced with "{recommended_disc}"\n'
-                        ]
-
-                    print(info)
+                    (_, original_desc, recommended_disc) = deprecated_entries[0]
+                    issue = WarningIssues(
+                        contract=contract.name,
+                        swc_id="111",
+                        title="Use of Deprecated solidity function",
+                        severity="Medium",
+                        filename=source_object.source_mapping.filename.short,
+                        description=f'Usage of "{original_desc}" should be replaced with "{recommended_disc}". \nSeveral functions and operators in Solidity are deprecated. \nUsing them leads to reduced code quality. \nWith new major versions of the Solidity compiler, \ndeprecated functions and operators may result in side effects and compile errors.',
+                        code=source_object.source_mapping.code.strip(),
+                        lineno= source_object.source_mapping.get_lines_str(),
+                    )
+                    issues.append(issue)
+            
+        return issues

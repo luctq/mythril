@@ -163,6 +163,7 @@ class MythrilDisassembler:
         address = util.get_indexed_address(0)
         contracts = []
         for file in solidity_files:
+            print(file)
             if ":" in file:
                 file, contract_name = file.split(":")
             else:

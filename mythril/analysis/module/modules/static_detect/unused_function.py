@@ -1,10 +1,10 @@
 from typing import List, Tuple
 from mythril.analysis.module.base import DetectionModule, ModuleType
 
-from mythril.ast.core.declarations.function_contract import FunctionContract
-from mythril.ast.core.declarations.function import Function
-from mythril.ast.core.declarations.contract import Contract
-from mythril.ast.core.compilation_unit import StaticCompilationUnit
+from mythril.solidity.ast.core.declarations.function_contract import FunctionContract
+from mythril.solidity.ast.core.declarations.function import Function
+from mythril.solidity.ast.core.declarations.contract import Contract
+from mythril.solidity.ast.core.compilation_unit import StaticCompilationUnit
 from mythril.analysis.warning_issue import WarningIssues
 class UnusedFunction(DetectionModule):
     def __init__(self):
@@ -55,7 +55,7 @@ class UnusedFunction(DetectionModule):
                 title="Unused Function",
                 severity="Medium",
                 filename=function.source_mapping.filename.short,
-                description="Function is never use in contract",
+                description=f"Function {function.name} is never use in contract.\nRemove all unused function from the code base",
                 code=function.source_mapping.code,
                 lineno=function.source_mapping.get_lines_str(),
             )

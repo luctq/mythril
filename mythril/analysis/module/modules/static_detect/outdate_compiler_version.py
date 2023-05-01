@@ -4,7 +4,8 @@
 
 import re
 from mythril.analysis.module.base import DetectionModule, ModuleType
-from mythril.ast.core.compilation_unit import StaticCompilationUnit
+from mythril.solidity.ast.core.compilation_unit import StaticCompilationUnit
+from mythril.analysis.warning_issue import WarningIssues
 # group:
 # 0: ^ > >= < <= (optional)
 # 1: ' ' (optional)
@@ -94,8 +95,8 @@ class OutdateCompilerVersion(DetectionModule):
         Detects pragma statements that allow for outdated solc versions.
         :return: Returns the relevant JSON data for the findings.
         """
-        # Detect all verrsion related pragmas and check if they are disallowed.
-        results = []
+        
+        issues = []
         pragma = self.compilation_unit.pragma_directives
         disallowed_pragmas = []
 
@@ -116,19 +117,29 @@ class OutdateCompilerVersion(DetectionModule):
                 print(info)
 
         if self.compilation_unit.solc_version not in self.ALLOWED_VERSIONS:
-
             if self.compilation_unit.solc_version in self.BUGGY_VERSIONS:
-                info = [
-                    "solc-",
-                    self.compilation_unit.solc_version,
-                    " ",
-                    self.BUGGY_VERSION_TXT,
-                ]
+                issue = WarningIssues(
+                        contract=self.compilation_unit.contracts_derived[0].name,
+                        swc_id="102",
+                        title="OUTDATE COMPILER VERSION",
+                        severity="Low",
+                        filename=pragma[0].source_mapping.filename.short,
+                        description=f"Version {pragma[0].name} is not is not recommended for deployment.\nIt is recommended to use a recent version of the Solidity compiler.",
+                        code=pragma[0].source_mapping.code.strip(),
+                        lineno=pragma[0].source_mapping.get_lines_str(),
+                    )
             else:
-                info = [
-                    "solc-",
-                    self.compilation_unit.solc_version,
-                    " is not recommended for deployment\n",
-                ]
-
-            print(info)
+                issue = WarningIssues(
+                        contract=self.compilation_unit.contracts_derived[0].name,
+                        swc_id="SWC-102",
+                        title="OUTDATE COMPILER VERSION",
+                        severity="Low",
+                        filename=pragma[0].source_mapping.filename.short,
+                        description=f"Version {pragma[0].name} is not is not recommended for deployment.\nIt is recommended to use a recent version of the Solidity compiler.",
+                        code=pragma[0].source_mapping.code.strip(),
+                        lineno=pragma[0].source_mapping.get_lines_str(),
+                    )
+            issues.append(issue)
+            
+        
+        return issues

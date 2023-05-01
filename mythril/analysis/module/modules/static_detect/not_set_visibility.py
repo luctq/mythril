@@ -1,10 +1,10 @@
 from typing import List, Tuple
 from mythril.analysis.module.base import DetectionModule, ModuleType
 
-from mythril.ast.core.declarations.function_contract import FunctionContract
-from mythril.ast.core.declarations.function import Function
-from mythril.ast.core.declarations.contract import Contract
-from mythril.ast.core.compilation_unit import StaticCompilationUnit
+from mythril.solidity.ast.core.declarations.function_contract import FunctionContract
+from mythril.solidity.ast.core.declarations.function import Function
+from mythril.solidity.ast.core.declarations.contract import Contract
+from mythril.solidity.ast.core.compilation_unit import StaticCompilationUnit
 from mythril.analysis.warning_issue import WarningIssues
 
 class NotSetVisibility(DetectionModule):
@@ -29,10 +29,10 @@ class NotSetVisibility(DetectionModule):
                 issue = WarningIssues(
                 contract=state_var.contract.name,
                 swc_id=100,
-                title="State variable visibility no set",
+                title="State variable visibility not set",
                 severity="Medium",
                 filename=state_var.source_mapping.filename.short,
-                description=f"State variable '{state_var.name}' not set visibility",
+                description=f"State variable '{state_var.name}' not set visibility.\nVariables can be specified as being public, internal or private.\nExplicitly define visibility for all state variables.",
                 code=state_var.source_mapping.code,
                 lineno=state_var.source_mapping.get_lines_str(),
                 )
@@ -53,10 +53,10 @@ class NotSetVisibility(DetectionModule):
             issue = WarningIssues(
                 contract=function.contract.name,
                 swc_id=100,
-                title="Function visibility no set",
+                title="Function visibility not set",
                 severity="Medium",
                 filename=function.source_mapping.filename.short,
-                description=f"Function '{function.name}' not set visibility",
+                description=f"Function '{function.name}' not set visibility.\nFunctions can be specified as being public, internal or private.\nExplicitly define visibility for all functions",
                 code=function.source_mapping.code,
                 lineno=function.source_mapping.get_lines_str(),
             )

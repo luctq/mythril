@@ -1,5 +1,5 @@
 from mythril.analysis.module.base import DetectionModule, ModuleType
-from mythril.ast.core.compilation_unit import StaticCompilationUnit
+from mythril.solidity.ast.core.compilation_unit import StaticCompilationUnit
 
 class PredeclarationUsageLocal(DetectionModule):
     def __init__(self):

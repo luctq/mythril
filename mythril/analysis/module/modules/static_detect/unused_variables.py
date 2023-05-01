@@ -2,12 +2,12 @@ from typing import List
 from mythril.analysis.module.base import DetectionModule, ModuleType
 from mythril.analysis.swc_data import PRESENCE_OF_UNUSED_VARIABLES
 from mythril.analysis.report import Issue
-from mythril.ast.core.compilation_unit import StaticCompilationUnit
-from mythril.ast.core.solidity_types.array_type import ArrayType
-from mythril.ast.core.variables.state_variable import StateVariable
+from mythril.solidity.ast.core.compilation_unit import StaticCompilationUnit
+from mythril.solidity.ast.core.solidity_types.array_type import ArrayType
+from mythril.solidity.ast.core.variables.state_variable import StateVariable
 from mythril.analysis.warning_issue import WarningIssues
-from mythril.ast.core.source_mapping.source_mapping import SourceMapping
-from mythril.ast.core.cfg.node import Node
+from mythril.solidity.ast.core.source_mapping.source_mapping import SourceMapping
+from mythril.solidity.ast.core.cfg.node import Node
 from mythril.exceptions import StaticError
 
 
@@ -78,7 +78,7 @@ class UnusedVariables(DetectionModule):
                         title="Unused Local Variables",
                         severity="Medium",
                         filename=var.source_mapping.filename.short,
-                        description=f"Local variable '{var.name}' is never use in function '{func.name}'",
+                        description=f"Local variable '{var.name}' is never use in function '{func.name}'.\nRemove all unused variables from the code base.",
                         code=var.source_mapping.code.strip(),
                         lineno=var.source_mapping.get_lines_str(),
                     )
@@ -92,7 +92,7 @@ class UnusedVariables(DetectionModule):
                         title="Unused Parameter Variables",
                         severity="Medium",
                         filename=var.source_mapping.filename.short,
-                        description=f"Parameter variable '{var.name}' is never use in function '{func.name}'",
+                        description=f"Parameter variable '{var.name}' is never use in function '{func.name}.\nRemove all unused variables from the code base. \n",
                         code=var.source_mapping.code.strip(),
                         lineno=var.source_mapping.get_lines_str(),
                     )
