@@ -11,7 +11,6 @@ if TYPE_CHECKING:
 # https://solidity.readthedocs.io/en/latest/units-and-global-variables.html#type-information
 class TypeInformation(Type):
     def __init__(self, c):
-        # pylint: disable=import-outside-toplevel
         from mythril.solidity.ast.core.declarations.contract import Contract
         from mythril.solidity.ast.core.declarations.enum import Enum
 

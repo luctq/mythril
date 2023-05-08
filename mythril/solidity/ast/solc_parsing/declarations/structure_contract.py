@@ -11,26 +11,22 @@ if TYPE_CHECKING:
     from mythril.solidity.ast.solc_parsing.declarations.contract import ContractSolc
 
 
-class StructureContractSolc:  # pylint: disable=too-few-public-methods
+class StructureContractSolc:
     """
     Structure class
     """
 
     # elems = [(type, name)]
 
-    def __init__(  # pylint: disable=too-many-arguments
+    def __init__(
         self,
         st: Structure,
         struct: Dict,
         contract_parser: "ContractSolc",
     ):
 
-        if contract_parser.is_compact_ast:
-            name = struct["name"]
-            attributes = struct
-        else:
-            name = struct["attributes"][contract_parser.get_key()]
-            attributes = struct["attributes"]
+        name = struct["name"]
+        attributes = struct
         if "canonicalName" in attributes:
             canonicalName = attributes["canonicalName"]
         else:

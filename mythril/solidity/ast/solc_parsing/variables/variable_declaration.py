@@ -11,8 +11,6 @@ class MultipleVariablesDeclaration(Exception):
     var (a,b) = ...
     It should occur only on local variable definition
     """
-
-    # pylint: disable=unnecessary-pass
     pass
 
 class VariableDeclarationSolc:
@@ -66,15 +64,8 @@ class VariableDeclarationSolc:
         return self._reference_id
     
     def _init_from_declaration(self, var: Dict, init: bool):
-        if self._is_compact_ast:
-            attributes = var
-            self._typeName = attributes["typeDescriptions"]["typeString"]
-        else:
-            assert len(var["children"]) <= 2
-            assert var["name"] == "VariableDeclaration"
-
-            attributes = var["attributes"]
-            self._typeName = attributes["type"]
+        attributes = var
+        self._typeName = attributes["typeDescriptions"]["typeString"]
         
         self._variable.name = attributes["name"]
         if "id" in var:
@@ -91,20 +82,14 @@ class VariableDeclarationSolc:
         # self._handle_comment(attributes)
         self._analyze_variable_attributes(attributes)
 
-        if self._is_compact_ast:
-            if var["typeName"]:
-                self._elem_to_parse = var["typeName"]
-            else:
-                pass
+        if var["typeName"]:
+            self._elem_to_parse = var["typeName"]
         else:
             pass
             
-        if self._is_compact_ast:
-            self._initializedNotParsed = init
-            if init:
-                self._variable.initialized = True
-        else:
-            pass
+        self._initializedNotParsed = init
+        if init:
+            self._variable.initialized = True
 
     def _analyze_variable_attributes(self, attributes: Dict):
         if "visibility" in attributes:

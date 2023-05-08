@@ -7,7 +7,7 @@ from mythril.solidity.ast.core.solidity_types.array_type import ArrayType
 from mythril.solidity.ast.core.variables.state_variable import StateVariable
 from mythril.analysis.warning_issue import WarningIssues
 from mythril.solidity.ast.core.source_mapping.source_mapping import SourceMapping
-from mythril.solidity.ast.core.cfg.node import Node
+from mythril.solidity.ast.core.cfg.node import Node, NodeType
 from mythril.exceptions import StaticError
 
 
@@ -28,13 +28,20 @@ def detect_unused_state_variables(contract):
 def detect_unused_local_variables(function):
     local_variables_used =  function.variables_read + function.variables_written
     local_variables = function.local_variables
-    for var in local_variables_used:
-        print("variables_used", var, var.__class__)
     return [x for x in local_variables if x not in local_variables_used]
 
 def detect_unused_parameter_variables(function):
     local_variables_used =  function.variables_read + function.variables_written
     parameter_variables = function.parameters 
+    
+    has_node_return = False
+    for node in function.nodes:
+        if (node.type == NodeType.RETURN):
+            has_node_return = True
+    if has_node_return == False:
+        for variable in function.returns:
+            if variable.name != '':
+                parameter_variables.append(variable)
     return [x for x in parameter_variables if x not in local_variables_used]
 
 class UnusedVariables(DetectionModule):
@@ -59,7 +66,7 @@ class UnusedVariables(DetectionModule):
                         contract=var.contract.name,
                         swc_id=PRESENCE_OF_UNUSED_VARIABLES,
                         title="Unused State Variables",
-                        severity="Medium",
+                        severity="Low",
                         filename=var.source_mapping.filename.short,
                         description=f"State variable '{var.name}'  is never use in contract {c.name}.\nRemove all unused variables from the code base.",
                         code=var.source_mapping.code.strip(),
@@ -76,7 +83,7 @@ class UnusedVariables(DetectionModule):
                         function=var.function.name,
                         swc_id=PRESENCE_OF_UNUSED_VARIABLES,
                         title="Unused Local Variables",
-                        severity="Medium",
+                        severity="Low",
                         filename=var.source_mapping.filename.short,
                         description=f"Local variable '{var.name}' is never use in function '{func.name}'.\nRemove all unused variables from the code base.",
                         code=var.source_mapping.code.strip(),
@@ -90,7 +97,7 @@ class UnusedVariables(DetectionModule):
                         function=var.function.name,
                         swc_id=PRESENCE_OF_UNUSED_VARIABLES,
                         title="Unused Parameter Variables",
-                        severity="Medium",
+                        severity="Low",
                         filename=var.source_mapping.filename.short,
                         description=f"Parameter variable '{var.name}' is never use in function '{func.name}.\nRemove all unused variables from the code base. \n",
                         code=var.source_mapping.code.strip(),

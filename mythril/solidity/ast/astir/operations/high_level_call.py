@@ -15,7 +15,6 @@ class HighLevelCall(Call, OperationWithLValue):
     High level message call
     """
 
-    # pylint: disable=too-many-arguments,too-many-instance-attributes
     def __init__(self, destination, function_name, nbr_arguments, result, type_call):
         assert isinstance(function_name, Constant)
         assert is_valid_lvalue(result) or result is None
@@ -34,7 +33,7 @@ class HighLevelCall(Call, OperationWithLValue):
 
     # Development function, to be removed once the code is stable
     # It is ovveride by LbraryCall
-    def _check_destination(self, destination):  # pylint: disable=no-self-use
+    def _check_destination(self, destination):
         assert isinstance(destination, (Variable, SolidityVariable))
 
     @property

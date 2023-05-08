@@ -27,17 +27,6 @@ class EventSolc:
             elems = event_data["parameters"]
             assert elems["nodeType"] == "ParameterList"
             self._elemsNotParsed = elems["parameters"]
-        else:
-            self._event.name = event_data["attributes"]["name"]
-            for elem in event_data["children"]:
-                # From Solidity 0.6.3 to 0.6.10 (included)
-                # Comment above a event might be added in the children
-                # of an event for the legacy ast
-                if elem["name"] == "ParameterList":
-                    if "children" in elem:
-                        self._elemsNotParsed = elem["children"]
-                    else:
-                        self._elemsNotParsed = []
 
     @property
     def is_compact_ast(self) -> bool:

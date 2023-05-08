@@ -21,13 +21,6 @@ class StateVariable(ChildContract, Variable):
         """
         return self.contract == contract
 
-    # endregion
-    ###################################################################################
-    ###################################################################################
-    # region Name
-    ###################################################################################
-    ###################################################################################
-
     @property
     def canonical_name(self) -> str:
         return f"{self.contract.name}.{self.name}"
@@ -42,13 +35,6 @@ class StateVariable(ChildContract, Variable):
         name, parameters, _ = self.signature
         return name + "(" + ",".join(parameters) + ")"
 
-    # endregion
-    ###################################################################################
-    ###################################################################################
-    # region IRs (initialization)
-    ###################################################################################
-    ###################################################################################
-
     @property
     def node_initialization(self) -> Optional["Node"]:
         """
@@ -60,7 +46,3 @@ class StateVariable(ChildContract, Variable):
     @node_initialization.setter
     def node_initialization(self, node_initialization):
         self._node_initialization = node_initialization
-
-    # endregion
-    ###################################################################################
-    ###################################################################################

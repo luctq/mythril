@@ -11,7 +11,7 @@ class AbstractOperation(abc.ABC):
         """
         Return the list of variables READ
         """
-        pass  # pylint: disable=unnecessary-pass
+        pass 
 
     @property
     @abc.abstractmethod
@@ -19,7 +19,7 @@ class AbstractOperation(abc.ABC):
         """
         Return the list of variables used
         """
-        pass  # pylint: disable=unnecessary-pass
+        pass
 
 
 class Operation(Context, ChildExpression, ChildNode, AbstractOperation):

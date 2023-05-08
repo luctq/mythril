@@ -141,63 +141,29 @@ class ContractSolc(CallerContextExpression):
                     self._remapping[elem["baseName"]["referencedDeclaration"]] = elem["baseName"][
                         "name"
                     ]
-    def _parse_base_contract_info(self):  # pylint: disable=too-many-branches
+    def _parse_base_contract_info(self):
         # Parse base contracts (immediate, non-linearized)
-        if self.is_compact_ast:
-            # Parse base contracts + constructors in compact-ast
-            if "baseContracts" in self._data:
-                for base_contract in self._data["baseContracts"]:
-                    if base_contract["nodeType"] != "InheritanceSpecifier":
-                        continue
-                    if (
-                        "baseName" not in base_contract
-                        or "referencedDeclaration" not in base_contract["baseName"]
-                    ):
-                        continue
+        # Parse base contracts + constructors in compact-ast
+        if "baseContracts" in self._data:
+            for base_contract in self._data["baseContracts"]:
+                if base_contract["nodeType"] != "InheritanceSpecifier":
+                    continue
+                if (
+                    "baseName" not in base_contract
+                    or "referencedDeclaration" not in base_contract["baseName"]
+                ):
+                    continue
 
-                    # Obtain our contract reference and add it to our base contract list
-                    referencedDeclaration = base_contract["baseName"]["referencedDeclaration"]
-                    self.baseContracts.append(referencedDeclaration)
+                # Obtain our contract reference and add it to our base contract list
+                referencedDeclaration = base_contract["baseName"]["referencedDeclaration"]
+                self.baseContracts.append(referencedDeclaration)
 
-                    # If we have defined arguments in our arguments object, this is a constructor invocation.
-                    # (note: 'arguments' can be [], which is not the same as None. [] implies a constructor was
-                    #  called with no arguments, while None implies no constructor was called).
-                    if "arguments" in base_contract and base_contract["arguments"] is not None:
-                        self.baseConstructorContractsCalled.append(referencedDeclaration)
-        else:
-            # Parse base contracts + constructors in legacy-ast
-            if "children" in self._data:
-                for base_contract in self._data["children"]:
-                    if base_contract["name"] != "InheritanceSpecifier":
-                        continue
-                    if "children" not in base_contract or len(base_contract["children"]) == 0:
-                        continue
-                    # Obtain all items for this base contract specification (base contract, followed by arguments)
-                    base_contract_items = base_contract["children"]
-                    if (
-                        "name" not in base_contract_items[0]
-                        or base_contract_items[0]["name"] != "UserDefinedTypeName"
-                    ):
-                        continue
-                    if (
-                        "attributes" not in base_contract_items[0]
-                        or "referencedDeclaration" not in base_contract_items[0]["attributes"]
-                    ):
-                        continue
-
-                    # Obtain our contract reference and add it to our base contract list
-                    referencedDeclaration = base_contract_items[0]["attributes"][
-                        "referencedDeclaration"
-                    ]
-                    self.baseContracts.append(referencedDeclaration)
-
-                    # If we have an 'attributes'->'arguments' which is None, this is not a constructor call.
-                    if (
-                        "attributes" not in base_contract
-                        or "arguments" not in base_contract["attributes"]
-                        or base_contract["attributes"]["arguments"] is not None
-                    ):
-                        self.baseConstructorContractsCalled.append(referencedDeclaration)
+                # If we have defined arguments in our arguments object, this is a constructor invocation.
+                # (note: 'arguments' can be [], which is not the same as None. [] implies a constructor was
+                #  called with no arguments, while None implies no constructor was called).
+                if "arguments" in base_contract and base_contract["arguments"] is not None:
+                    self.baseConstructorContractsCalled.append(referencedDeclaration)
+        
     
     def _parse_type_alias(self, item: Dict) -> None:
         assert "name" in item
@@ -266,22 +232,12 @@ class ContractSolc(CallerContextExpression):
             self.log_incorrect_parsing(f"Missing enum {e}")
 
     def _analyze_enum(self, enum):
-        if self.is_compact_ast:
-            name = enum["name"]
-            canonicalName = enum["canonicalName"]
-        else:
-            name = enum["attributes"][self.get_key()]
-            if "canonicalName" in enum["attributes"]:
-                canonicalName = enum["attributes"]["canonicalName"]
-            else:
-                canonicalName = self._contract.name + "." + name
+        name = enum["name"]
+        canonicalName = enum["canonicalName"]
         values = []
         for child in enum[self.get_children("members")]:
             assert child[self.get_key()] == "EnumValue"
-            if self.is_compact_ast:
-                values.append(child["name"])
-            else:
-                values.append(child["attributes"][self.get_key()])
+            values.append(child["name"])
 
         new_enum = EnumContract(name, canonicalName, values)
         new_enum.set_contract(self._contract)
@@ -485,7 +441,49 @@ class ContractSolc(CallerContextExpression):
         except (VariableNotFound, KeyError) as e:
             self.log_incorrect_parsing(f"Missing state variable {e}")
 
-    def _analyze_params_elements(  # pylint: disable=too-many-arguments,too-many-locals
+    def _analyze_params_element(
+        self,
+        Cls: Callable,
+        Cls_parser: Callable,
+        element_parser: FunctionSolc,
+        explored_reference_id: Set[str],
+        parser: List[FunctionSolc],
+        all_elements: Dict[str, Function],
+    ):
+        elem = Cls(self._contract.compilation_unit)
+        elem.set_contract(self._contract)
+        underlying_function = element_parser.underlying_function
+        # TopLevel function are not analyzed here
+        assert isinstance(underlying_function, FunctionContract)
+        elem.set_contract_declarer(underlying_function.contract_declarer)
+        elem.set_offset(
+            element_parser.function_not_parsed["src"],
+            self._contract.compilation_unit,
+        )
+
+        elem_parser = Cls_parser(
+            elem, element_parser.function_not_parsed, self, self.static_parser
+        )
+        if (
+            element_parser.underlying_function.id
+            and element_parser.underlying_function.id in explored_reference_id
+        ):
+            # Already added from other fathers
+            return
+        if element_parser.underlying_function.id:
+            explored_reference_id.add(element_parser.underlying_function.id)
+        elem_parser.analyze_params()
+        if isinstance(elem, Modifier):
+            self._contract.compilation_unit.add_modifier(elem)
+        else:
+            self._contract.compilation_unit.add_function(elem)
+
+        self._static_parser.add_function_or_modifier_parser(elem_parser)
+
+        all_elements[elem.canonical_name] = elem
+        parser.append(elem_parser)
+
+    def _analyze_params_elements(
         self,
         elements_no_params: List[FunctionSolc],
         getter: Callable[["ContractSolc"], List[FunctionSolc]],
@@ -497,7 +495,18 @@ class ContractSolc(CallerContextExpression):
         
         all_elements = {}
 
+        explored_reference_id = set()
         try:
+            for father in self._contract.inheritance:
+                father_parser = self._static_parser.underlying_contract_to_parser[father]
+                for element_parser in getter(father_parser):
+                    self._analyze_params_element(
+                        Cls, Cls_parser, element_parser, explored_reference_id, parser, all_elements
+                    )
+
+            accessible_elements = self._contract.available_elements_from_inheritances(
+                all_elements, getter_available
+            )
 
             # If there is a constructor in the functions
             # We remove the previous constructor
@@ -511,12 +520,22 @@ class ContractSolc(CallerContextExpression):
                 if element_parser.underlying_function.is_constructor:
                     has_constructor = True
 
-           
+            if has_constructor:
+                _accessible_functions = {
+                    k: v for (k, v) in accessible_elements.items() if not v.is_constructor
+                }
             for element_parser in elements_no_params:
+                accessible_elements[
+                    element_parser.underlying_function.full_name
+                ] = element_parser.underlying_function
                 all_elements[
                     element_parser.underlying_function.canonical_name
                 ] = element_parser.underlying_function
 
+            for element in all_elements.values():
+                if accessible_elements[element.full_name] != all_elements[element.canonical_name]:
+                    element.is_shadowed = True
+                    accessible_elements[element.full_name].shadows = True
         except (VariableNotFound, KeyError) as e:
             self.log_incorrect_parsing(f"Missing params {e}")
         return all_elements

@@ -392,6 +392,17 @@ class Function(SourceMapping, metaclass=ABCMeta):
 
         """
         return [c.modifier for c in self._modifiers]
+
+    def add_modifier(self, modif: "ModifierStatements"):
+        self._modifiers.append(modif)
+    
+    @property
+    def modifiers_statements(self) -> List[ModifierStatements]:
+        """
+        list(ModifierCall): List of the modifiers call (include expression and irs)
+        """
+        return list(self._modifiers)
+
     def all_internal_calls(self) -> List["InternalCallType"]:
         """recursive version of internal_calls"""
         if self._all_internals_calls is None:
@@ -570,9 +581,7 @@ class Function(SourceMapping, metaclass=ABCMeta):
     def generate_astir_and_analyze(self):
         for node in self.nodes:
             node.astir_generation()
-        # tim hieu cho nay
         self._analyze_read_write()
-        # print("self.state_variables_written",  self.state_variables_written)
         self._analyze_calls()
     def _analyze_read_write(self):
         """Compute variables read/written/..."""

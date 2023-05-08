@@ -12,7 +12,7 @@ class StaticExec(StaticExecCore):
     Execute static analyze smart contract
     """ 
     def __init__(self,
-                 target: Union[str, CryticCompile], modules: Optional[List[str]] = None, **kwargs):
+                 target: Union[str, CryticCompile], modules: Optional[List[str]] = None):
         super().__init__()
         self._parsers: List[StaticCompilationUnitSolc] = [] 
         try:
@@ -20,7 +20,7 @@ class StaticExec(StaticExecCore):
                 crytic_compile = target
             else:
                 self.filename = target
-                crytic_compile = CryticCompile(target, **kwargs)
+                crytic_compile = CryticCompile(target)
             self._crytic_compile = crytic_compile
         except InvalidCompilation as e:
             raise StaticError(f"Invalid compilation: \n{str(e)}")
@@ -32,16 +32,7 @@ class StaticExec(StaticExecCore):
             self._parsers.append(parser)
             for path, ast in compilation_unit.asts.items():
                 parser.parse_top_level_of_ast(ast, path)
-                # self.add_source_code(path)
-            # _update_file_scopes(compilation_unit_static.scopes.values())
         
-        self._init_parsing_and_analyses()
-        for module in ModuleLoader().get_detection_modules(EntryPoint.CALLBACK, modules):
-            if module.type == ModuleType.STATIC:
-                module.set_up(parser.compilation_unit)
-                module.execute_static()
-
-    def _init_parsing_and_analyses(self) -> None:
         for parser in self._parsers:
             try:
                 parser.parse_contracts()
@@ -52,4 +43,10 @@ class StaticExec(StaticExecCore):
                 parser.analyze_contracts()
             except Exception as e:
                 raise e
+            
+        for module in ModuleLoader().get_detection_modules(EntryPoint.CALLBACK, modules):
+            if module.type == ModuleType.STATIC:
+                module.set_up(parser.compilation_unit)
+                module.execute_static()
+
             

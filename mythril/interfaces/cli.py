@@ -164,10 +164,10 @@ def get_output_parser() -> ArgumentParser:
     parser.add_argument(
         "-o",
         "--outform",
-        choices=["text", "markdown", "json", "jsonv2"],
+        choices=["text", "markdown", "json", "jsonv2", "table"],
         default="text",
         help="report output format",
-        metavar="<text/markdown/json/jsonv2>",
+        metavar="<text/markdown/json/jsonv2/table>",
     )
     return parser
 
@@ -845,6 +845,7 @@ def execute_command(
                     "json": report.as_json(),
                     # "jsonv2": report.as_swc_standard_format(),
                     "text": report.as_text(),
+                    "table": report.as_table(),
                     # "markdown": report.as_markdown(),
                 }
                 print(outputs[args.outform])

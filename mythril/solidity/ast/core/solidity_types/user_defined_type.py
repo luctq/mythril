@@ -9,7 +9,6 @@ if TYPE_CHECKING:
     from mythril.solidity.ast.core.declarations.enum import Enum
     from mythril.solidity.ast.core.declarations.contract import Contract
 
-# pylint: disable=import-outside-toplevel
 class UserDefinedType(Type):
     def __init__(self, t):
         from mythril.solidity.ast.core.declarations.structure import Structure

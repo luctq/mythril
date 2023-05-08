@@ -17,6 +17,8 @@ from mythril.solidity.ast.core.expressions.type_conversion import TypeConversion
 from mythril.solidity.ast.core.expressions.call_expression import CallExpression
 from mythril.solidity.ast.core.expressions.member_access import MemberAccess
 from mythril.solidity.ast.core.expressions.new_contract import NewContract
+from mythril.solidity.ast.core.expressions.new_array import NewArray
+from mythril.solidity.ast.core.expressions.new_elementary_type import NewElementaryType
 from mythril.solidity.ast.core.expressions.tuple_expression import TupleExpression
 from mythril.solidity.ast.core.expressions.super_identifier import SuperIdentifier
 from mythril.solidity.ast.core.solidity_types.array_type import ArrayType
@@ -58,7 +60,7 @@ def filter_name(value: str) -> str:
                 counter -= 1
         value = value[: idx + 1]
     return value
-def parse_call(expression: Dict, caller_context):  # pylint: disable=too-many-statements
+def parse_call(expression: Dict, caller_context):
     src = expression["src"]
     attributes = expression
     type_conversion = expression["kind"] == "typeConversion"
@@ -360,8 +362,57 @@ def parse_expression(expression: Dict, caller_context: CallerContextExpression) 
 
     # NewExpression is not a root expression, it's always the child of another expression
     if name == "NewExpression":
-        return Expression
-        pass
+        type_name = expression["typeName"]
+        if type_name[caller_context.get_key()] == "ArrayTypeName":
+            depth = 0
+            while type_name[caller_context.get_key()] == "ArrayTypeName":
+                # Note: dont conserve the size of the array if provided
+                # We compute it directly
+                type_name = type_name["baseType"]
+                depth += 1
+            if type_name[caller_context.get_key()] == "ElementaryTypeName":
+                array_type = ElementaryType(type_name["name"])
+            elif type_name[caller_context.get_key()] == "UserDefinedTypeName":
+                if "name" not in type_name:
+                    name_type = type_name["pathNode"]["name"]
+                else:
+                    name_type = type_name["name"]
+
+                array_type = parse_type(UnknownType(name_type), caller_context)
+            elif type_name[caller_context.get_key()] == "FunctionTypeName":
+                array_type = parse_type(type_name, caller_context)
+            else:
+                raise ParsingError(f"Incorrect type array {type_name}")
+            array = NewArray(depth, array_type)
+            array.set_offset(src, caller_context.compilation_unit)
+            return array
+        if type_name[caller_context.get_key()] == "ElementaryTypeName":
+            if is_compact_ast:
+                elem_type = ElementaryType(type_name["name"])
+            else:
+                elem_type = ElementaryType(type_name["attributes"]["name"])
+            new_elem = NewElementaryType(elem_type)
+            new_elem.set_offset(src, caller_context.compilation_unit)
+            return new_elem
+
+        assert type_name[caller_context.get_key()] == "UserDefinedTypeName"
+
+        if is_compact_ast:
+
+            # Changed introduced in Solidity 0.8
+            # see https://github.com/crytic/slither/issues/794
+
+            # TODO explore more the changes introduced in 0.8 and the usage of pathNode/IdentifierPath
+            if "name" not in type_name:
+                assert "pathNode" in type_name and "name" in type_name["pathNode"]
+                contract_name = type_name["pathNode"]["name"]
+            else:
+                contract_name = type_name["name"]
+        else:
+            contract_name = type_name["attributes"]["name"]
+        new = NewContract(contract_name)
+        new.set_offset(src, caller_context.compilation_unit)
+        return new
 
     if name == "ModifierInvocation":
         called = parse_expression(expression["modifierName"], caller_context)
@@ -378,7 +429,24 @@ def parse_expression(expression: Dict, caller_context: CallerContextExpression) 
         return base
     # Introduced with solc 0.8
     if name == "IdentifierPath":
-        return Expression
-        pass
+        value = expression["name"]
+
+        if "referencedDeclaration" in expression:
+            referenced_declaration = expression["referencedDeclaration"]
+        else:
+            referenced_declaration = None
+
+        var, was_created = find_variable(
+            value, caller_context, referenced_declaration, is_identifier_path=True
+        )
+        if was_created:
+            var.set_offset(src, caller_context.compilation_unit)
+
+        identifier = Identifier(var)
+        identifier.set_offset(src, caller_context.compilation_unit)
+
+        var.references.append(identifier.source_mapping)
+
+        return identifier
 
     raise ParsingError(f"Expression not parsed {name}")

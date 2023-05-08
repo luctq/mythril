@@ -1,10 +1,9 @@
 from mythril.exceptions import StaticException
 from mythril.solidity.ast.utils.integer_conversion import convert_string_to_fraction
 
-# pylint: disable=too-many-branches
 def convert_subdenomination(
     value: str, sub: str
-) -> int:  # pylint: disable=too-many-return-statements
+) -> int:
 
     decimal_value = convert_string_to_fraction(value)
     if sub == "wei":

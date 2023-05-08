@@ -137,12 +137,8 @@ class StaticCompilationUnitSolc(CallerContextExpression):
 
                 self._underlying_contract_to_parser[contract] = contract_parser
             elif top_level_data[self.get_key()] == "PragmaDirective":
-                if self._is_compact_ast:
-                    pragma = Pragma(top_level_data["literals"], scope)
-                    scope.pragmas.add(pragma)
-                else:
-                    pragma = Pragma(top_level_data["attributes"]["literals"], scope)
-                    scope.pragmas.add(pragma)
+                pragma = Pragma(top_level_data["literals"], scope)
+                scope.pragmas.add(pragma)
                 pragma.set_offset(top_level_data["src"], self._compilation_unit)
                 self._compilation_unit.pragma_directives.append(pragma)
             # handle later
@@ -407,7 +403,7 @@ class StaticCompilationUnitSolc(CallerContextExpression):
         contract.analyze_content_functions()
         contract.set_is_analyzed(True)
 
-    def analyze_contracts(self):  # pylint: disable=too-many-statements,too-many-branches
+    def analyze_contracts(self): 
         if not self._parsed:
             raise StaticException("Parse the contract before running analyses")
         self._convert_to_astir()

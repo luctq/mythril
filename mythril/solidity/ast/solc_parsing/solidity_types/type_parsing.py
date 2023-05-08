@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from mythril.solidity.ast.core.declarations.enum import Enum
     from mythril.solidity.ast.core.declarations.contract import Contract
     from mythril.solidity.ast.core.declarations.function import Function
-class UnknownType:  # pylint: disable=too-few-public-methods
+class UnknownType:
     def __init__(self, name):
         self._name = name
 
@@ -28,7 +28,7 @@ class UnknownType:  # pylint: disable=too-few-public-methods
     def name(self):
         return self._name
 
-def _find_from_type_name(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements,too-many-arguments
+def _find_from_type_name( 
     name: str,
     functions_direct_access: List["Function"],
     contracts_direct_access: List["Contract"],

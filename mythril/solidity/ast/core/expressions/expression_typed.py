@@ -4,7 +4,7 @@ from mythril.solidity.ast.core.expressions.expression import Expression
 if TYPE_CHECKING:
     from mythril.solidity.ast.core.solidity_types.type import Type
     
-class ExpressionTyped(Expression):  # pylint: disable=too-few-public-methods
+class ExpressionTyped(Expression):
     def __init__(self) -> None:
         super().__init__()
         self._type: Optional["Type"] = None

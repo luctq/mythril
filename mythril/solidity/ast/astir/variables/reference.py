@@ -49,7 +49,6 @@ class ReferenceVariable(ChildNode, Variable):
     def points_to(self, points_to):
         # Can only be a rvalue of
         # Member or Index operator
-        # pylint: disable=import-outside-toplevel
         from mythril.solidity.ast.astir.utils.utils import is_valid_lvalue
 
         assert is_valid_lvalue(points_to) or isinstance(

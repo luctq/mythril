@@ -156,7 +156,7 @@ class ExpressionVisitor:
 
     # post visit
 
-    def _post_visit(self, expression):  # pylint: disable=too-many-branches
+    def _post_visit(self, expression): 
         if isinstance(expression, AssignmentOperation):
             self._post_assignement_operation(expression)
 

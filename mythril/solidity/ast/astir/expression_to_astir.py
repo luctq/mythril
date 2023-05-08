@@ -122,9 +122,8 @@ def convert_assignment(left, right, t, return_type):
 
 
 class ExpressionToAstIR(ExpressionVisitor):
-    def __init__(self, expression, node):  # pylint: disable=super-init-not-called
-        from mythril.solidity.ast.core.cfg.node import NodeType  # pylint: disable=import-outside-toplevel
-
+    def __init__(self, expression, node):  
+        from mythril.solidity.ast.core.cfg.node import NodeType 
         self._expression = expression
         self._node = node
         self._result: List[Operation] = []
@@ -140,7 +139,6 @@ class ExpressionToAstIR(ExpressionVisitor):
         return self._result
     
     def _post_assignement_operation(self, expression):
-        print("_post_assignement_operation")
         left = get(expression.expression_left)
         right = get(expression.expression_right)
         if isinstance(left, list):  # tuple expression:
@@ -203,7 +201,6 @@ class ExpressionToAstIR(ExpressionVisitor):
                 set_val(expression, left)
 
     def _post_binary_operation(self, expression):
-        print("_post_binary_operation")
         left = get(expression.expression_left)
         right = get(expression.expression_right)
         val = TemporaryVariable(self._node)
@@ -243,8 +240,7 @@ class ExpressionToAstIR(ExpressionVisitor):
 
     def _post_call_expression(
             self, expression
-        ):  # pylint: disable=too-many-branches,too-many-statements,too-many-locals
-        print("_post_call_expression")
+        ): 
         assert isinstance(expression, CallExpression)
 
         expression_called = expression.called
@@ -349,19 +345,15 @@ class ExpressionToAstIR(ExpressionVisitor):
             set_val(expression, val)
 
     def _post_conditional_expression(self, expression):
-        print("_post_conditional_expression")
         pass
 
     def _post_elementary_type_name_expression(self, expression):
-        print("_post_elementary_type_name_expression")
         set_val(expression, expression.type)
 
     def _post_identifier(self, expression):
-        print("_post_identifier")
         set_val(expression, expression.value)
 
     def _post_index_access(self, expression):
-        print("_post_index_access")
         left = get(expression.expression_left)
         right = get(expression.expression_right)
         # Left can be a type for abi.decode(var, uint[2])
@@ -388,12 +380,10 @@ class ExpressionToAstIR(ExpressionVisitor):
         set_val(expression, val)
 
     def _post_literal(self, expression):
-        print("_post_literal")
         cst = Constant(expression.value, expression.type, expression.subdenomination)
         set_val(expression, cst)
 
     def _post_member_access(self, expression):
-        print("_post_member_access")
         expr = get(expression.expression)
 
         # Look for type(X).max / min
@@ -471,14 +461,12 @@ class ExpressionToAstIR(ExpressionVisitor):
                 set_val(expression, expr.custom_errors_as_dict[expression.member_name])
                 return
         val = ReferenceVariable(self._node)
-        print("hello")
         member = Member(expr, Constant(expression.member_name), val)
         member.set_expression(expression)
         self._result.append(member)
         set_val(expression, val)
 
     def _post_new_array(self, expression):
-        print("_post_new_array")
         val = TemporaryVariable(self._node)
         operation = TmpNewArray(expression.depth, expression.array_type, val)
         operation.set_expression(expression)
@@ -486,7 +474,6 @@ class ExpressionToAstIR(ExpressionVisitor):
         set_val(expression, val)
 
     def _post_new_contract(self, expression):
-        print("_post_new_contract")
         val = TemporaryVariable(self._node)
         operation = TmpNewContract(expression.contract_name, val)
         operation.set_expression(expression)
@@ -501,7 +488,6 @@ class ExpressionToAstIR(ExpressionVisitor):
         set_val(expression, val)
 
     def _post_new_elementary_type(self, expression):
-        print(" _post_new_elementary_type")
         # TODO unclear if this is ever used?
         val = TemporaryVariable(self._node)
         operation = TmpNewElementaryType(expression.type, val)
@@ -510,7 +496,6 @@ class ExpressionToAstIR(ExpressionVisitor):
         set_val(expression, val)
 
     def _post_tuple_expression(self, expression):
-        print("_post_tuple_expression")
         expressions = [get(e) if e else None for e in expression.expressions]
         if len(expressions) == 1:
             val = expressions[0]
@@ -519,7 +504,6 @@ class ExpressionToAstIR(ExpressionVisitor):
         set_val(expression, val)
 
     def _post_type_conversion(self, expression):
-        print("_post_type_conversion")
         expr = get(expression.expression)
         val = TemporaryVariable(self._node)
         operation = TypeConversion(val, expr, expression.type)
@@ -531,7 +515,6 @@ class ExpressionToAstIR(ExpressionVisitor):
     def _post_unary_operation(
         self, expression
     ):
-        print("_post_unary_operation")
         value = get(expression.expression)
         if expression.type in [UnaryOperationType.BANG, UnaryOperationType.TILD]:
             lvalue = TemporaryVariable(self._node)

@@ -297,6 +297,28 @@ class Report:
 
         return template.render(filename=name, issues=self.sorted_issues())
 
+    def as_table(self):
+        """
+
+        :return:
+        """
+        from prettytable import PrettyTable, ALL
+        my_table = PrettyTable()
+        my_table.field_names = ["No.", "SWC ID", "Name", "Severity", "Contract", "Description", "File"]
+        my_table._max_width = {"Description": 50, "File": 40}
+        my_table.align = "l"
+        my_table.hrules = ALL
+        for index, issue in enumerate(self.sorted_issues()):
+            no = index
+            swc_id = issue['swc-id']
+            name = issue['title']
+            severity = issue['severity']
+            contract = issue['contract']
+            description = issue['description']
+            in_file = f"{issue['filename']}:{issue['lineno']}\n\n{issue['code']}"
+            my_table.add_row([no, swc_id, name, severity, contract, description, in_file])
+        return str(my_table)
+
     def as_json(self):
         """
 

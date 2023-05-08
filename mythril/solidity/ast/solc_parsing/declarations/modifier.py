@@ -33,15 +33,7 @@ class ModifierSolc(FunctionSolc):
 
         self._analyze_attributes()
 
-        if self.is_compact_ast:
-            params = self._functionNotParsed["parameters"]
-        else:
-            children = self._functionNotParsed["children"]
-            # It uses to be
-            # params = children[0]
-            # But from Solidity 0.6.3 to 0.6.10 (included)
-            # Comment above a function might be added in the children
-            params = next(child for child in children if child[self.get_key()] == "ParameterList")
+        params = self._functionNotParsed["parameters"]
 
         if params:
             self._parse_params(params)
@@ -52,25 +44,12 @@ class ModifierSolc(FunctionSolc):
 
         self._content_was_analyzed = True
 
-        if self.is_compact_ast:
-            body = self._functionNotParsed.get("body", None)
+        body = self._functionNotParsed.get("body", None)
 
-            if body and body[self.get_key()] == "Block":
-                self._function.is_implemented = True
-                self._parse_cfg(body)
+        if body and body[self.get_key()] == "Block":
+            self._function.is_implemented = True
+            self._parse_cfg(body)
 
-        else:
-            children = self._functionNotParsed["children"]
-
-            self._function.is_implemented = False
-            if len(children) > 1:
-                # It uses to be
-                # params = children[1]
-                # But from Solidity 0.6.3 to 0.6.10 (included)
-                # Comment above a function might be added in the children
-                block = next(child for child in children if child[self.get_key()] == "Block")
-                self._function.is_implemented = True
-                self._parse_cfg(block)
 
         for local_var_parser in self._local_variables_parser:
             local_var_parser.analyze(self)

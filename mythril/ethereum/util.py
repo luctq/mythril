@@ -174,6 +174,7 @@ except ConnectionError:
 
 
 def extract_version(file: str):
+    from solc_select import solc_select
     version_line = None
     for line in file.split("\n"):
         if "pragma solidity" not in line:
@@ -204,32 +205,36 @@ def extract_version(file: str):
         else min_version
     )
     version_constraint = semver.SimpleSpec(version_spec)
-
+    solc_current_version, _ = solc_select.current_version()
     for version in all_versions:
         if version in version_constraint:
             if "0.5.17" in str(version):
                 # Solidity 0.5.17 Does not compile in a lot of cases.
                 continue
+            # print(version, solc_current_version)
+            # print(pragma_dict["min_carrot"] == "" and str(solc_current_version) != str(version))
+            # print(pragma_dict["min_carrot"] == "^" and str(solc_current_version) < str(version))
+            if ((pragma_dict["min_carrot"] == "" and str(solc_current_version) != str(version)) or (pragma_dict["min_carrot"] == "^" and str(solc_current_version) < str(version))):
+                print("hello")
+                if str(version) not in solc_select.installed_versions():
+                    solc_select.switch_global_version(str(version), True)
+                elif str(version) != solc_current_version:
+                    solc_select.switch_global_version(str(version), False)
             return str(version)
 
     else:
         return None
 
-    return None
+    return None 
 
 
 def extract_binary(file: str) -> str:
-    from solc_select import solc_select
+    # from solc_select import solc_select
     with open(file) as f:
         version = extract_version(f.read())
 
     if version and NpmSpec("^0.8.0").match(Version(version)):
         args.use_integer_module = False
-    solc_current_version, _ = solc_select.current_version()
-    if version not in solc_select.installed_versions():
-        solc_select.switch_global_version(version, True)
-    elif version != solc_current_version:
-        solc_select.switch_global_version(version, False)
     if version is None:
         return os.environ.get("SOLC") or "solc"
     return solc_exists(version)

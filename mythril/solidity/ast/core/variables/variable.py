@@ -10,7 +10,6 @@ from mythril.solidity.ast.core.solidity_types.elementary_type import ElementaryT
 if TYPE_CHECKING:
     from mythril.solidity.ast.core.expressions.expression import Expression
 
-# pylint: disable=too-many-instance-attributes
 class Variable(SourceMapping):
     def __init__(self):
         super().__init__()
@@ -151,7 +150,6 @@ class Variable(SourceMapping):
         Return the signature of the state variable as a function signature
         :return: (str, list(str), list(str)), as (name, list parameters type, list return values type)
         """
-        # pylint: disable=import-outside-toplevel
         from mythril.solidity.ast.utils.type import (
             export_nested_types_from_variable,
             export_return_type_from_variable,

@@ -144,7 +144,6 @@ class MythrilAnalyzer:
             static = StaticExec(static_compile, modules=modules)
 
         for contract in self.contracts:
-            # print(contract.solc_json)
             StartTime()  # Reinitialize start time for new contracts
             try:
                 # static = StaticExec(contract.input_file, modules=modules)
@@ -199,5 +198,5 @@ class MythrilAnalyzer:
         )
         for issue in all_issues:
             report.append_issue(issue)
-        print("--- %s seconds ---" % (time.time() - start_time))  
+        # print("--- %s seconds ---" % (time.time() - start_time))  
         return report

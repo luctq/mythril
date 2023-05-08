@@ -10,7 +10,7 @@ from mythril.solidity.ast.utils.integer_conversion import convert_string_to_int
 class Constant(AstIRVariable):
     def __init__(
         self, val, constant_type=None, subdenomination=None
-    ):  # pylint: disable=too-many-branches
+    ):
         super().__init__()
         assert isinstance(val, str)
 
@@ -20,7 +20,7 @@ class Constant(AstIRVariable):
         if subdenomination:
             val = str(convert_subdenomination(val, subdenomination))
 
-        if constant_type:  # pylint: disable=too-many-nested-blocks
+        if constant_type:
             assert isinstance(constant_type, ElementaryType)
             self._type = constant_type
             if constant_type.type in Int + Uint + ["address"]:

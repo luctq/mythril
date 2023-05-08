@@ -7,6 +7,7 @@ from mythril.solidity.ast.core.context.context import Context
 from mythril.solidity.ast.core.scope.scope import FileScope
 from mythril.solidity.ast.core.declarations.pragma_directive import Pragma
 from mythril.solidity.ast.core.declarations.function import Function
+from mythril.solidity.ast.core.declarations.modifier import Modifier
 from mythril.solidity.ast.core.declarations.import_directive import Import
 if TYPE_CHECKING:
     from mythril.solidity.ast.core.static_exec_core import StaticExecCore
@@ -24,7 +25,8 @@ class StaticCompilationUnit(Context):
         self.scopes: Dict[Filename, FileScope] = {}
 
         self._all_functions: Set[Function] = set()
-
+        self._all_modifiers: Set[Modifier] = set()
+        
         self.counter_astir_tuple = 0
         self.counter_astir_temporary = 0
         self.counter_astir_reference = 0
@@ -60,6 +62,13 @@ class StaticCompilationUnit(Context):
     def add_function(self, func: Function):
         self._all_functions.add(func)
 
+    @property
+    def modifiers(self) -> List[Modifier]:
+        return list(self._all_modifiers)
+
+    def add_modifier(self, modif: Modifier):
+        self._all_modifiers.add(modif)
+    
     def get_scope(self, filename_str: str) -> FileScope:
         filename = self._crytic_compile_compilation_unit.crytic_compile.filename_lookup(
             filename_str

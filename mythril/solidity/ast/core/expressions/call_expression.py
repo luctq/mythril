@@ -3,7 +3,7 @@ from typing import Optional, List
 from mythril.solidity.ast.core.expressions.expression import Expression
 
 
-class CallExpression(Expression):  # pylint: disable=too-many-instance-attributes
+class CallExpression(Expression):
     def __init__(self, called, arguments, type_call):
         assert isinstance(called, Expression)
         super().__init__()

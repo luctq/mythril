@@ -7,7 +7,7 @@ class LocalVariableSolc(VariableDeclarationSolc):
     def __init__(self, variable: LocalVariable, variable_data: Dict):
         super().__init__(variable, variable_data)
     
-    @property
+    @property   
     def underlying_variable(self) -> LocalVariable:
         # Todo: Not sure how to overcome this with mypy
         assert isinstance(self._variable, LocalVariable)

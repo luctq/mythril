@@ -33,7 +33,7 @@ class NotSetVisibility(DetectionModule):
                 severity="Medium",
                 filename=state_var.source_mapping.filename.short,
                 description=f"State variable '{state_var.name}' not set visibility.\nVariables can be specified as being public, internal or private.\nExplicitly define visibility for all state variables.",
-                code=state_var.source_mapping.code,
+                code=state_var.source_mapping.code.strip(),
                 lineno=state_var.source_mapping.get_lines_str(),
                 )
                 issues.append(issue)
@@ -41,13 +41,15 @@ class NotSetVisibility(DetectionModule):
         for function in self.compilation_unit.functions:
             if (
                 function.visibility not in ["public"]
-                or function.is_constructor
-                or function.is_fallback
-                or function.is_constructor_variables
             ):
                 continue
+            function_def = ''
+            for line in function.source_mapping.code.split('\n'):
+                function_def += line.strip() + " "
+                if ("{" in line):
+                    break
             if (
-                function.source_mapping.code.split('\n', 1)[0].find(" public ") != -1
+                function_def.find(" public ") != -1
             ):
                 continue
             issue = WarningIssues(

@@ -22,10 +22,8 @@ from mythril.analysis.module.modules.unchecked_retval import UncheckedRetval
 from mythril.analysis.module.modules.user_assertions import UserAssertions
 from mythril.analysis.module.modules.static_detect.unused_variables import UnusedVariables
 from mythril.analysis.module.modules.static_detect.unused_function import UnusedFunction
-from mythril.analysis.module.modules.static_detect.predeclaration_usage_local import PredeclarationUsageLocal
 from mythril.analysis.module.modules.static_detect.shadowing_variables import ShadowingVarible
 from mythril.analysis.module.modules.static_detect.not_set_visibility import NotSetVisibility
-from mythril.analysis.module.modules.static_detect.outdate_compiler_version import OutdateCompilerVersion
 from mythril.analysis.module.modules.static_detect.deprecated_standards import DeprecatedStandards
 
 from mythril.analysis.module.base import EntryPoint
@@ -113,10 +111,8 @@ class ModuleLoader(object, metaclass=Singleton):
                 UserAssertions(),
                 UnusedVariables(),
                 UnusedFunction(),
-                PredeclarationUsageLocal(),
                 ShadowingVarible(),
                 NotSetVisibility(),
-                OutdateCompilerVersion(),
                 DeprecatedStandards(),
             ]
         )

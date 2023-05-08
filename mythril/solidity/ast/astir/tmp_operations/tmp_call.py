@@ -7,7 +7,7 @@ from mythril.solidity.ast.core.declarations.custom_error import CustomError
 from mythril.solidity.ast.core.variables.variable import Variable
 from mythril.solidity.ast.astir.operations.lvalue import OperationWithLValue
 
-class TmpCall(OperationWithLValue):  # pylint: disable=too-many-instance-attributes
+class TmpCall(OperationWithLValue):
     def __init__(self, called, nbr_arguments, result, type_call):
         assert isinstance(
             called,

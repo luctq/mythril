@@ -6,13 +6,12 @@ from mythril.solidity.ast.core.declarations.solidity_variables import SolidityVa
 from mythril.solidity.ast.astir.variables.constant import Constant
 
 
-class LowLevelCall(Call, OperationWithLValue):  # pylint: disable=too-many-instance-attributes
+class LowLevelCall(Call, OperationWithLValue):
     """
     High level message call
     """
 
     def __init__(self, destination, function_name, nbr_arguments, result, type_call):
-        # pylint: disable=too-many-arguments
         assert isinstance(destination, (Variable, SolidityVariable))
         assert isinstance(function_name, Constant)
         super().__init__()

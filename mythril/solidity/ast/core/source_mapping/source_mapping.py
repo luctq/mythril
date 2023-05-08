@@ -64,7 +64,7 @@ def _compute_line(
 
 def _convert_source_mapping(
     offset: str, compilation_unit: "StaticCompilationUnit"
-) -> Source:  # pylint: disable=too-many-locals
+) -> Source: 
     """
     Convert a text offset to a real offset
     see https://solidity.readthedocs.io/en/develop/miscellaneous.html#source-mappings

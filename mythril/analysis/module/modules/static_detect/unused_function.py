@@ -18,6 +18,7 @@ class UnusedFunction(DetectionModule):
 
         functions_used = set()
         for contract in self.compilation_unit.contracts_derived:
+            # Get function list call
             all_functionss_called = [
                 f.all_internal_calls() for f in contract.functions_entry_points
             ]
@@ -32,12 +33,12 @@ class UnusedFunction(DetectionModule):
             functions_used |= {
                 lib[1].canonical_name for lib in all_libs_called if isinstance(lib, tuple)
             }
+        
         for function in sorted(self.compilation_unit.functions, key=lambda x: x.canonical_name):
             if (
                 function.visibility in ["public", "external"]
                 or function.is_constructor
                 or function.is_fallback
-                or function.is_constructor_variables
             ):
                 continue
             if function.canonical_name in functions_used:

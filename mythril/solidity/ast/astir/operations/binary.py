@@ -46,7 +46,7 @@ class BinaryType(Enum):
         ]
 
     @staticmethod
-    def get_type(operation_type):  # pylint: disable=too-many-branches
+    def get_type(operation_type): 
         if operation_type == "**":
             return BinaryType.POWER
         if operation_type == "*":
@@ -98,7 +98,7 @@ class BinaryType(Enum):
             BinaryType.DIVISION,
         ]
 
-    def __str__(self):  # pylint: disable=too-many-branches
+    def __str__(self):
         if self == BinaryType.POWER:
             return "**"
         if self == BinaryType.MULTIPLICATION:

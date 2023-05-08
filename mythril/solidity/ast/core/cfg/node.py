@@ -21,6 +21,8 @@ from mythril.solidity.ast.astir.operations.length import Length
 from mythril.solidity.ast.astir.operations.internal_call import InternalCall
 from mythril.solidity.ast.astir.operations.low_level_call import LowLevelCall
 from mythril.solidity.ast.astir.operations.solidity_call import SolidityCall
+from mythril.solidity.ast.astir.operations.library_call import LibraryCall
+from mythril.solidity.ast.astir.operations.high_level_call import HighLevelCall
 from mythril.solidity.ast.astir.variables.reference import ReferenceVariable
 from mythril.solidity.ast.astir.variables.constant import Constant
 from mythril.solidity.ast.astir.variables.temporary import TemporaryVariable
@@ -79,6 +81,7 @@ class Node(SourceMapping, ChildFunction):
         file_scope: "FileScope",
     ):
         super().__init__()
+        self._node_id: int = node_id
         self._node_type = node_type
         # TODO: rename to explicit CFG
         self._sons: List["Node"] = []
@@ -271,6 +274,22 @@ class Node(SourceMapping, ChildFunction):
     def internal_calls_as_expressions(self, exprs: List[Expression]):
         self._internal_calls_as_expressions = exprs
 
+    def add_father(self, father: "Node"):
+        """Add a father node
+
+        Args:
+            father: father to add
+        """
+        self._fathers.append(father)
+
+    def set_fathers(self, fathers: List["Node"]):
+        """Set the father nodes
+
+        Args:
+            fathers: list of fathers to add
+        """
+        self._fathers = fathers
+
     @property
     def fathers(self) -> List["Node"]:
         """Returns the father nodes
@@ -280,6 +299,22 @@ class Node(SourceMapping, ChildFunction):
         """
         return list(self._fathers)
     
+    def remove_father(self, father: "Node"):
+        """Remove the father node. Do nothing if the node is not a father
+
+        Args:
+            :param father:
+        """
+        self._fathers = [x for x in self._fathers if x.node_id != father.node_id]
+
+    def remove_son(self, son: "Node"):
+        """Remove the son node. Do nothing if the node is not a son
+
+        Args:
+            :param son:
+        """
+        self._sons = [x for x in self._sons if x.node_id != son.node_id]
+
     def add_son(self, son: "Node"):
         """Add a son node
 
@@ -382,11 +417,8 @@ class Node(SourceMapping, ChildFunction):
             self._irs = convert_expression(expression, self)
         self._find_read_write_call()
     def _find_read_write_call(self):
-        i = 1
         for ir in self.irs:
-            print(i)
             self._astir_vars |= {v for v in ir.read if self._is_valid_astir_var(v)}
-            print(i+1)
             if isinstance(ir, OperationWithLValue):
                 var = ir.lvalue
                 if var and self._is_valid_astir_var(var):
@@ -422,24 +454,23 @@ class Node(SourceMapping, ChildFunction):
             if isinstance(ir, LowLevelCall):
                 assert isinstance(ir.destination, (Variable, SolidityVariable))
                 self._low_level_calls.append((ir.destination, ir.function_name.value))
-            # elif isinstance(ir, HighLevelCall) and not isinstance(ir, LibraryCall):
-            #     if isinstance(ir.destination.type, Contract):
-            #         self._high_level_calls.append((ir.destination.type, ir.function))
-            #     elif ir.destination == SolidityVariable("this"):
-            #         self._high_level_calls.append((self.function.contract, ir.function))
-            #     else:
-            #         try:
-            #             self._high_level_calls.append((ir.destination.type.type, ir.function))
-            #         except AttributeError as error:
-            #             #  pylint: disable=raise-missing-from
-            #             raise StaticException(
-            #                 f"Function not found on IR: {ir}.\nNode: {self} ({self.source_mapping})\nFunction: {self.function}\nPlease try compiling with a recent Solidity version. {error}"
-            #             )
-            # elif isinstance(ir, LibraryCall):
-            #     assert isinstance(ir.destination, Contract)
-            #     assert isinstance(ir.function, Function)
-            #     self._high_level_calls.append((ir.destination, ir.function))
-            #     self._library_calls.append((ir.destination, ir.function))
+            elif isinstance(ir, HighLevelCall) and not isinstance(ir, LibraryCall):
+                if isinstance(ir.destination.type, Contract):
+                    self._high_level_calls.append((ir.destination.type, ir.function))
+                elif ir.destination == SolidityVariable("this"):
+                    self._high_level_calls.append((self.function.contract, ir.function))
+                else:
+                    try:
+                        self._high_level_calls.append((ir.destination.type.type, ir.function))
+                    except AttributeError as error:
+                        raise StaticException(
+                            f"Function not found on IR: {ir}.\nNode: {self} ({self.source_mapping})\nFunction: {self.function}\nPlease try compiling with a recent Solidity version. {error}"
+                        )
+            elif isinstance(ir, LibraryCall):
+                assert isinstance(ir.destination, Contract)
+                assert isinstance(ir.function, Function)
+                self._high_level_calls.append((ir.destination, ir.function))
+                self._library_calls.append((ir.destination, ir.function))
         
         self._vars_read = list(set(self._vars_read))
         self._state_vars_read = [v for v in self._vars_read if isinstance(v, StateVariable)]
@@ -461,3 +492,12 @@ class Node(SourceMapping, ChildFunction):
 def link_nodes(node1: Node, node2: Node):
     node1.add_son(node2)
     node2.add_father(node1)
+
+def insert_node(origin: Node, node_inserted: Node):
+    sons = origin.sons
+    link_nodes(origin, node_inserted)
+    for son in sons:
+        son.remove_father(origin)
+        origin.remove_son(son)
+
+        link_nodes(node_inserted, son)

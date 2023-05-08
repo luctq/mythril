@@ -1,18 +1,22 @@
 from mythril.solidity.ast.solc_parsing.declarations.caller_context import CallerContextExpression
 from typing import Dict, Optional, Union, List, TYPE_CHECKING
 
-from mythril.solidity.ast.core.declarations.function import Function, FunctionType
+from mythril.solidity.ast.core.declarations.contract import Contract
+from mythril.solidity.ast.core.declarations.function import Function, FunctionType, ModifierStatements
 from mythril.solidity.ast.core.declarations.function_contract import FunctionContract
 from mythril.solidity.ast.core.variables.local_variable import LocalVariable
 from mythril.solidity.ast.solc_parsing.variables.local_variable import LocalVariableSolc
 from mythril.solidity.ast.solc_parsing.variables.variable_declaration import MultipleVariablesDeclaration
 from mythril.solidity.ast.core.source_mapping.source_mapping import Source
-from mythril.solidity.ast.core.cfg.node import NodeType, Node, link_nodes
+from mythril.solidity.ast.core.cfg.node import NodeType, Node, link_nodes, insert_node
 from mythril.solidity.ast.core.cfg.scope import Scope
 from mythril.solidity.ast.solc_parsing.cfg.node import NodeSolc
 from mythril.solidity.ast.solc_parsing.exceptions import ParsingError
 from mythril.solidity.ast.core.variables.local_variable_init_from_tuple import LocalVariableInitFromTuple
 from mythril.solidity.ast.solc_parsing.variables.local_variable_init_from_tuple import LocalVariableInitFromTupleSolc
+from mythril.solidity.ast.solc_parsing.expressions.expression_parsing import parse_expression
+from mythril.solidity.ast.astir.export_values import ExportValues
+
 if TYPE_CHECKING:
     from mythril.solidity.ast.solc_parsing.declarations.contract import ContractSolc
     from mythril.solidity.ast.core.compilation_unit import StaticCompilationUnit
@@ -34,12 +38,9 @@ class FunctionSolc(CallerContextExpression):
         self._function = function
 
         # Only present if compact AST
-        if self.is_compact_ast:
-            self._function.name = function_data["name"]
-            if "id" in function_data:
-                self._function.id = function_data["id"]
-        else:
-            self._function.name = function_data["attributes"][self.get_key()]
+        self._function.name = function_data["name"]
+        if "id" in function_data:
+            self._function.id = function_data["id"]
         self._functionNotParsed = function_data
         self._params_was_analyzed = False
         self._content_was_analyzed = False
@@ -131,6 +132,10 @@ class FunctionSolc(CallerContextExpression):
         ] = local_var_parser.underlying_variable
         self._local_variables_parser.append(local_var_parser)
 
+    @property
+    def function_not_parsed(self) -> Dict:
+        return self._functionNotParsed
+
     def _analyze_type(self):
         """
         Analyz the type of the function
@@ -138,10 +143,8 @@ class FunctionSolc(CallerContextExpression):
         For example both the fallback and the receiver will have an empty name
         :return:
         """
-        if self.is_compact_ast:
-            attributes = self._functionNotParsed
-        else:
-            attributes = self._functionNotParsed["attributes"]
+        
+        attributes = self._functionNotParsed
 
         if self._function.name == "":
             self._function.function_type = FunctionType.FALLBACK
@@ -158,10 +161,8 @@ class FunctionSolc(CallerContextExpression):
                 self._function.function_type = FunctionType.CONSTRUCTOR
     
     def _analyze_attributes(self):
-        if self.is_compact_ast:
-            attributes = self._functionNotParsed
-        else:
-            attributes = self._functionNotParsed["attributes"]
+        
+        attributes = self._functionNotParsed
 
         if "payable" in attributes:
             self._function.payable = attributes["payable"]
@@ -214,21 +215,9 @@ class FunctionSolc(CallerContextExpression):
         self._params_was_analyzed = True
         self._analyze_attributes()
         
-        if self.is_compact_ast:
-            params = self._functionNotParsed["parameters"]
-            returns = self._functionNotParsed["returnParameters"]
-        else:
-            children = self._functionNotParsed[self.get_children("children")]
-            # It uses to be
-            # params = children[0]
-            # returns = children[1]
-            # But from Solidity 0.6.3 to 0.6.10 (included)
-            # Comment above a function might be added in the children
-            child_iter = iter(
-                [child for child in children if child[self.get_key()] == "ParameterList"]
-            )
-            params = next(child_iter)
-            returns = next(child_iter)
+        params = self._functionNotParsed["parameters"]
+        returns = self._functionNotParsed["returnParameters"]
+
         if params:
             self._parse_params(params)
         if returns:
@@ -255,15 +244,13 @@ class FunctionSolc(CallerContextExpression):
             return
         self._content_was_analyzed = True
 
-        if self.is_compact_ast:
-            body = self._functionNotParsed.get("body", None)
-            if body and body[self.get_key()] == "Block":
-                self._function.is_implemented = True
-                self._parse_cfg(body)
-            # for modifier in self._functionNotParsed["modifiers"]:
-            #     self._parse_modifier(modifier)
-        else:
-            pass
+        body = self._functionNotParsed.get("body", None)
+        if body and body[self.get_key()] == "Block":
+            self._function.is_implemented = True
+            self._parse_cfg(body)
+        for modifier in self._functionNotParsed["modifiers"]:
+            self._parse_modifier(modifier)
+
         for local_var_parser in self._local_variables_parser:
             local_var_parser.analyze(self)
         for node_parser in self._node_to_nodesolc.values():
@@ -275,26 +262,71 @@ class FunctionSolc(CallerContextExpression):
         node = self._new_node(NodeType.ENTRYPOINT, cfg["src"], self.underlying_function)
         self._function.entry_point = node.underlying_node
 
-        if self.is_compact_ast:
-            statements = cfg["statements"]
-        else:
-            statements = cfg[self.get_children("children")]
+        statements = cfg["statements"]
         if not statements:
             self._function.is_empty = True
         else:
             self._function.is_empty = False
             check_arithmetic = self.compilation_unit.solc_version >= "0.8.0"
             self._parse_block(cfg, node, check_arithmetic=check_arithmetic)
+    
+    def _parse_modifier(self, modifier: Dict):
+        # [{'id': 34, 'kind': 'modifierInvocation', 'modifierName': {'id': 33, 'name': 'requireB', 'nameLocations': ['303:8:0'], 'nodeType': 'IdentifierPath', 'referencedDeclaration': 31, 'src': '303:8:0'}, 'nodeType': 'ModifierInvocation', 'src': '303:8:0'}]
+        m = parse_expression(modifier, self)
+        # self._expression_modifiers.append(m)
+
+        # Do not parse modifier nodes for interfaces
+        if not self._function.is_implemented:
+            return
+
+        for m in ExportValues(m).result():
+            if isinstance(m, Function):
+                node_parser = self._new_node(
+                    NodeType.EXPRESSION, modifier["src"], self.underlying_function
+                )
+                node_parser.add_unparsed_expression(modifier)
+                # The latest entry point is the entry point, or the latest modifier call
+                if self._function.modifiers:
+                    latest_entry_point = self._function.modifiers_statements[-1].nodes[-1]
+                else:
+                    latest_entry_point = self._function.entry_point
+                insert_node(latest_entry_point, node_parser.underlying_node)
+                self._function.add_modifier(
+                    ModifierStatements(
+                        modifier=m,
+                        entry_point=latest_entry_point,
+                        nodes=[latest_entry_point, node_parser.underlying_node],
+                    )
+                )
+
+            elif isinstance(m, Contract):
+                node_parser = self._new_node(
+                    NodeType.EXPRESSION, modifier["src"], self.underlying_function
+                )
+                node_parser.add_unparsed_expression(modifier)
+                # The latest entry point is the entry point, or the latest constructor call
+                if self._function.explicit_base_constructor_calls_statements:
+                    latest_entry_point = self._function.explicit_base_constructor_calls_statements[
+                        -1
+                    ].nodes[-1]
+                else:
+                    latest_entry_point = self._function.entry_point
+                insert_node(latest_entry_point, node_parser.underlying_node)
+                self._function.add_explicit_base_constructor_calls_statements(
+                    ModifierStatements(
+                        modifier=m,
+                        entry_point=latest_entry_point,
+                        nodes=[latest_entry_point, node_parser.underlying_node],
+                    )
+                )
+
     def _parse_block(self, block: Dict, node: NodeSolc, check_arithmetic: bool = False):
         """
         Return:
             Node
         """
         assert block[self.get_key()] == "Block"
-        if self.is_compact_ast:
-            statements = block["statements"]
-        else:
-            statements = block[self.get_children("children")]
+        statements = block["statements"]
 
         check_arithmetic = check_arithmetic | node.underlying_node.scope.is_checked
         new_scope = Scope(check_arithmetic, False, node.underlying_node.scope)
@@ -302,6 +334,20 @@ class FunctionSolc(CallerContextExpression):
             node = self._parse_statement(statement, node, new_scope)
         return node 
     
+    def _parse_unchecked_block(self, block: Dict, node: NodeSolc):
+        """
+        Return:
+            Node
+        """
+        assert block[self.get_key()] == "UncheckedBlock"
+
+        statements = block["statements"]
+
+        new_scope = Scope(False, False, node.underlying_node.scope)
+        for statement in statements:
+            node = self._parse_statement(statement, node, new_scope)
+        return node
+
     def _parse_if(self, if_statement: Dict, node: NodeSolc) -> NodeSolc:
         falseStatement = None
         
@@ -452,6 +498,43 @@ class FunctionSolc(CallerContextExpression):
         link_underlying_nodes(node_condition, node_endDoWhile)
         return node_endDoWhile
 
+    def _parse_try_catch(self, statement: Dict, node: NodeSolc) -> NodeSolc:
+        # Lay ra thong tin thuoc tinh externalCall neu khong co tra ve
+        externalCall = statement.get("externalCall", None)
+
+        if externalCall is None:
+            raise ParsingError(f"Try/Catch not correctly parsed by Slither {statement}")
+        catch_scope = Scope(
+            node.underlying_node.scope.is_checked, False, node.underlying_node.scope
+        )
+        new_node = self._new_node(NodeType.TRY, statement["src"], catch_scope)
+        new_node.add_unparsed_expression(externalCall)
+        link_underlying_nodes(node, new_node)
+        node = new_node
+
+        for clause in statement.get("clauses", []):
+            self._parse_catch(clause, node)
+        return node
+
+    def _parse_catch(self, statement: Dict, node: NodeSolc) -> NodeSolc:
+        block = statement.get("block", None)
+
+        if block is None:
+            raise ParsingError(f"Catch not correctly parsed by Slither {statement}")
+        try_scope = Scope(node.underlying_node.scope.is_checked, False, node.underlying_node.scope)
+
+        try_node = self._new_node(NodeType.CATCH, statement["src"], try_scope)
+        link_underlying_nodes(node, try_node)
+
+        params = statement.get("parameters", None)
+
+        if params:
+            for param in params.get("parameters", []):
+                assert param[self.get_key()] == "VariableDeclaration"
+                self._add_param(param)
+
+        return self._parse_statement(block, try_node, try_scope)
+
     def _parse_statement(
         self, statement: Dict, node: NodeSolc, scope: Union[Scope, Function]
     ) -> NodeSolc:
@@ -476,7 +559,7 @@ class FunctionSolc(CallerContextExpression):
         elif name == "Block":
             node = self._parse_block(statement, node)
         elif name == "UncheckedBlock":
-            pass
+            node = self._parse_unchecked_block(statement, node)
         elif name == "InlineAssembly":
             # Added with solc 0.6 - the yul code is an AST
             pass
@@ -515,10 +598,7 @@ class FunctionSolc(CallerContextExpression):
             # assert len(statement[self.get_children('expression')]) == 1
             # assert not 'attributes' in statement
             # expression = parse_expression(statement[self.get_children('children')][0], self)
-            if self.is_compact_ast:
-                expression = statement[self.get_children("expression")]
-            else:
-                expression = statement[self.get_children("expression")][0]
+            expression = statement[self.get_children("expression")]
             new_node = self._new_node(NodeType.EXPRESSION, statement["src"], scope)
             new_node.add_unparsed_expression(expression)
             link_underlying_nodes(node, new_node)
@@ -543,11 +623,8 @@ class FunctionSolc(CallerContextExpression):
         assert params[self.get_key()] == "ParameterList"
 
         self._function.parameters_src().set_offset(params["src"], self._function.compilation_unit)
-        
-        if self.is_compact_ast:
-            params = params["parameters"]
-        else:
-            params = params[self.get_children("children")]
+ 
+        params = params["parameters"]
         for param in params:
             assert param[self.get_key()] == "VariableDeclaration"
             local_var = self._add_param(param)
@@ -558,10 +635,7 @@ class FunctionSolc(CallerContextExpression):
 
         self._function.returns_src().set_offset(returns["src"], self._function.compilation_unit)
 
-        if self.is_compact_ast:
-            returns = returns["parameters"]
-        else:
-            returns = returns[self.get_children("children")]
+        returns = returns["parameters"]
 
         for ret in returns:
             assert ret[self.get_key()] == "VariableDeclaration"
@@ -602,169 +676,86 @@ class FunctionSolc(CallerContextExpression):
             return new_node
         except MultipleVariablesDeclaration:
            # Custom handling of var (a,b) = .. style declaration
-            if self.is_compact_ast:
-                variables = statement["declarations"]
-                count = len(variables)
+            variables = statement["declarations"]
+            count = len(variables)
 
-                if (
-                    statement["initialValue"]["nodeType"] == "TupleExpression"
-                    and len(statement["initialValue"]["components"]) == count
-                ):
-                    inits = statement["initialValue"]["components"]
-                    i = 0
-                    new_node = node
-                    for variable in variables:
-                        if variable is None:
-                            continue
-                        init = inits[i]
+            if (
+                statement["initialValue"]["nodeType"] == "TupleExpression"
+                and len(statement["initialValue"]["components"]) == count
+            ):
+                inits = statement["initialValue"]["components"]
+                i = 0
+                new_node = node
+                for variable in variables:
+                    if variable is None:
+                        continue
+                    init = inits[i]
+                    src = variable["src"]
+                    i = i + 1
+
+                    new_statement = {
+                        "nodeType": "VariableDefinitionStatement",
+                        "src": src,
+                        "declarations": [variable],
+                        "initialValue": init,
+                    }
+                    new_node = self._parse_variable_definition(new_statement, new_node)
+
+            else:
+                # If we have
+                # var (a, b) = f()
+                # we can split in multiple declarations, without init
+                # Then we craft one expression that does the assignment
+                variables = []
+                i = 0
+                new_node = node
+                for variable in statement["declarations"]:
+                    if variable:
                         src = variable["src"]
-                        i = i + 1
-
+                        # Create a fake statement to be consistent
                         new_statement = {
                             "nodeType": "VariableDefinitionStatement",
                             "src": src,
                             "declarations": [variable],
-                            "initialValue": init,
-                        }
-                        new_node = self._parse_variable_definition(new_statement, new_node)
-
-                else:
-                    # If we have
-                    # var (a, b) = f()
-                    # we can split in multiple declarations, without init
-                    # Then we craft one expression that does the assignment
-                    variables = []
-                    i = 0
-                    new_node = node
-                    for variable in statement["declarations"]:
-                        if variable:
-                            src = variable["src"]
-                            # Create a fake statement to be consistent
-                            new_statement = {
-                                "nodeType": "VariableDefinitionStatement",
-                                "src": src,
-                                "declarations": [variable],
-                            }
-                            variables.append(variable)
-
-                            new_node = self._parse_variable_definition_init_tuple(
-                                new_statement, i, new_node
-                            )
-                        i = i + 1
-
-                    var_identifiers = []
-                    # craft of the expression doing the assignement
-                    for v in variables:
-                        identifier = {
-                            "nodeType": "Identifier",
-                            "src": v["src"],
-                            "name": v["name"],
-                            "typeDescriptions": {"typeString": v["typeDescriptions"]["typeString"]},
-                        }
-                        var_identifiers.append(identifier)
-
-                    tuple_expression = {
-                        "nodeType": "TupleExpression",
-                        "src": statement["src"],
-                        "components": var_identifiers,
-                    }
-
-                    expression = {
-                        "nodeType": "Assignment",
-                        "src": statement["src"],
-                        "operator": "=",
-                        "type": "tuple()",
-                        "leftHandSide": tuple_expression,
-                        "rightHandSide": statement["initialValue"],
-                        "typeDescriptions": {"typeString": "tuple()"},
-                    }
-                    node = new_node
-                    new_node = self._new_node(
-                        NodeType.EXPRESSION, statement["src"], node.underlying_node.scope
-                    )
-                    new_node.add_unparsed_expression(expression)
-                    link_underlying_nodes(node, new_node)
-
-            else:
-                count = 0
-                children = statement[self.get_children("children")]
-                child = children[0]
-                while child[self.get_key()] == "VariableDeclaration":
-                    count = count + 1
-                    child = children[count]
-
-                assert len(children) == (count + 1)
-                tuple_vars = children[count]
-
-                variables_declaration = children[0:count]
-                i = 0
-                new_node = node
-                if tuple_vars[self.get_key()] == "TupleExpression":
-                    assert len(tuple_vars[self.get_children("children")]) == count
-                    for variable in variables_declaration:
-                        init = tuple_vars[self.get_children("children")][i]
-                        src = variable["src"]
-                        i = i + 1
-                        # Create a fake statement to be consistent
-                        new_statement = {
-                            self.get_key(): "VariableDefinitionStatement",
-                            "src": src,
-                            self.get_children("children"): [variable, init],
-                        }
-
-                        new_node = self._parse_variable_definition(new_statement, new_node)
-                else:
-                    # If we have
-                    # var (a, b) = f()
-                    # we can split in multiple declarations, without init
-                    # Then we craft one expression that does the assignment
-                    assert tuple_vars[self.get_key()] in ["FunctionCall", "Conditional"]
-                    variables = []
-                    for variable in variables_declaration:
-                        src = variable["src"]
-                        # Create a fake statement to be consistent
-                        new_statement = {
-                            self.get_key(): "VariableDefinitionStatement",
-                            "src": src,
-                            self.get_children("children"): [variable],
                         }
                         variables.append(variable)
 
                         new_node = self._parse_variable_definition_init_tuple(
                             new_statement, i, new_node
                         )
-                        i = i + 1
-                    var_identifiers = []
-                    # craft of the expression doing the assignement
-                    for v in variables:
-                        identifier = {
-                            self.get_key(): "Identifier",
-                            "src": v["src"],
-                            "attributes": {
-                                "value": v["attributes"][self.get_key()],
-                                "type": v["attributes"]["type"],
-                            },
-                        }
-                        var_identifiers.append(identifier)
+                    i = i + 1
 
-                    expression = {
-                        self.get_key(): "Assignment",
-                        "src": statement["src"],
-                        "attributes": {"operator": "=", "type": "tuple()"},
-                        self.get_children("children"): [
-                            {
-                                self.get_key(): "TupleExpression",
-                                "src": statement["src"],
-                                self.get_children("children"): var_identifiers,
-                            },
-                            tuple_vars,
-                        ],
+                var_identifiers = []
+                # craft of the expression doing the assignement
+                for v in variables:
+                    identifier = {
+                        "nodeType": "Identifier",
+                        "src": v["src"],
+                        "name": v["name"],
+                        "typeDescriptions": {"typeString": v["typeDescriptions"]["typeString"]},
                     }
-                    node = new_node
-                    new_node = self._new_node(
-                        NodeType.EXPRESSION, statement["src"], node.underlying_node.scope
-                    )
-                    new_node.add_unparsed_expression(expression)
-                    link_underlying_nodes(node, new_node)
+                    var_identifiers.append(identifier)
+
+                tuple_expression = {
+                    "nodeType": "TupleExpression",
+                    "src": statement["src"],
+                    "components": var_identifiers,
+                }
+
+                expression = {
+                    "nodeType": "Assignment",
+                    "src": statement["src"],
+                    "operator": "=",
+                    "type": "tuple()",
+                    "leftHandSide": tuple_expression,
+                    "rightHandSide": statement["initialValue"],
+                    "typeDescriptions": {"typeString": "tuple()"},
+                }
+                node = new_node
+                new_node = self._new_node(
+                    NodeType.EXPRESSION, statement["src"], node.underlying_node.scope
+                )
+                new_node.add_unparsed_expression(expression)
+                link_underlying_nodes(node, new_node)
 
             return new_node

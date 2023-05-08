@@ -5,7 +5,7 @@ from mythril.solidity.ast.core.declarations.function_contract import FunctionCon
 from mythril.solidity.ast.astir.operations.call import Call
 from mythril.solidity.ast.astir.operations.lvalue import OperationWithLValue
 
-class InternalCall(Call, OperationWithLValue):  # pylint: disable=too-many-instance-attributes
+class InternalCall(Call, OperationWithLValue):
     def __init__(
         self, function: Union[Function, Tuple[str, str]], nbr_arguments, result, type_call
     ):

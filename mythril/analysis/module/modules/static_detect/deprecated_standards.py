@@ -10,8 +10,6 @@ class DeprecatedStandards(DetectionModule):
     """
     Use of Deprecated Standards
     """
-
-    # The format for the following deprecated lists is [(detecting_signature, original_text, recommended_text)]
     DEPRECATED_SOLIDITY_VARIABLE = [
         ("block.blockhash", "block.blockhash()", "blockhash()"),
         ("msg.gas", "msg.gas", "gasleft()"),
@@ -34,7 +32,7 @@ class DeprecatedStandards(DetectionModule):
 
         Returns:
             list of tuple: (detecting_signature, original_text, recommended_text)"""
-        # Perform analysis on this expression
+        
         export = ExportValues(expression)
         export_values = export.result()
 
@@ -86,7 +84,6 @@ class DeprecatedStandards(DetectionModule):
                     results.append((state_variable, deprecated_results))
 
         # Loop through all functions + modifiers in this contract.
-        # pylint: disable=too-many-nested-blocks
         for function in contract.functions_and_modifiers_declared:
             # Loop through each node in this function.
             for node in function.nodes:
