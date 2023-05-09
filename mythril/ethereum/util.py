@@ -215,7 +215,6 @@ def extract_version(file: str):
             # print(pragma_dict["min_carrot"] == "" and str(solc_current_version) != str(version))
             # print(pragma_dict["min_carrot"] == "^" and str(solc_current_version) < str(version))
             if ((pragma_dict["min_carrot"] == "" and str(solc_current_version) != str(version)) or (pragma_dict["min_carrot"] == "^" and str(solc_current_version) < str(version))):
-                print("hello")
                 if str(version) not in solc_select.installed_versions():
                     solc_select.switch_global_version(str(version), True)
                 elif str(version) != solc_current_version:
