@@ -28,7 +28,7 @@ class NotSetVisibility(DetectionModule):
                     continue
                 issue = WarningIssues(
                 contract=state_var.contract.name,
-                swc_id=100,
+                swc_id=108,
                 title="State variable visibility not set",
                 severity="Medium",
                 filename=state_var.source_mapping.filename.short,
